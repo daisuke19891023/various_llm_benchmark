@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 from various_llm_benchmark.llm.protocol import LLMClient
-from various_llm_benchmark.models import ChatMessage, LLMResponse
+from various_llm_benchmark.models import ChatMessage, ImageInput, LLMResponse
 
 if TYPE_CHECKING:
     from google.genai import Client
@@ -43,6 +43,42 @@ class GeminiLLMClient(LLMClient):
         request_kwargs: dict[str, object] = {
             "model": model or self._default_model,
             "contents": gemini_messages,
+            "config": {"temperature": self._temperature},
+        }
+        if system_prompt:
+            request_kwargs["system_instruction"] = system_prompt
+
+        response: Any = models_client.generate_content(**request_kwargs)
+        content = _extract_text(response)
+        model_name = _extract_model(response, model or self._default_model)
+        return LLMResponse(content=content, model=model_name, raw=_dump_raw(response))
+
+    def vision(
+        self,
+        prompt: str,
+        image: ImageInput,
+        *,
+        model: str | None = None,
+        system_prompt: str | None = None,
+    ) -> LLMResponse:
+        """Generate a response that includes image context."""
+        models_client = cast("Any", self._client.models)
+        request_kwargs: dict[str, object] = {
+            "model": model or self._default_model,
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [
+                        {"text": prompt},
+                        {
+                            "inline_data": {
+                                "mime_type": image.media_type,
+                                "data": image.data,
+                            },
+                        },
+                    ],
+                },
+            ],
             "config": {"temperature": self._temperature},
         }
         if system_prompt:

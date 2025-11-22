@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
 import typer
 
 from various_llm_benchmark.agents.providers import AgnoAgentProvider, ProviderName
 from various_llm_benchmark.interfaces.commands.common import build_messages
+from various_llm_benchmark.media.images import read_image_file
 from various_llm_benchmark.interfaces.commands.web_search_clients import resolve_web_search_client
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
 from various_llm_benchmark.settings import settings
@@ -16,6 +18,14 @@ HISTORY_OPTION: list[str] | None = typer.Option(
     None,
     help="'role:content' 形式の履歴を複数回指定できます。",
     show_default=False,
+)
+
+IMAGE_ARGUMENT = typer.Argument(
+    ...,
+    exists=True,
+    readable=True,
+    dir_okay=False,
+    help="解析する画像ファイルのパス",
 )
 
 PROVIDER_OPTION = typer.Option(
@@ -95,4 +105,20 @@ def agent_web_search(
     """組み込みWeb検索ツールをAgno経由で呼び出します."""
     client = resolve_web_search_client(provider, use_light_model=light_model)
     response = client.search(prompt, model=model)
+    typer.echo(response.content)
+
+
+@agent_app.command("vision")
+def agent_vision(
+    prompt: str,
+    image_path: Path = IMAGE_ARGUMENT,
+    provider: ProviderName = PROVIDER_OPTION,
+    model: str | None = MODEL_OPTION,
+    light_model: bool = LIGHT_MODEL_OPTION,
+) -> None:
+    """Agnoエージェントで画像入力を含めた応答を生成します."""
+    resolved_path = Path(image_path)
+    image_input = read_image_file(resolved_path)
+    provider_client = _create_provider(use_light_model=light_model)
+    response = provider_client.vision(prompt, image_input, provider=provider, model=model)
     typer.echo(response.content)

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
 import typer
 
 from various_llm_benchmark.agents.providers import OpenAIAgentsProvider
 from various_llm_benchmark.interfaces.commands.common import build_messages
+from various_llm_benchmark.media.images import read_image_file
 from various_llm_benchmark.interfaces.commands.web_search_clients import build_openai_web_search_tool
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
 from various_llm_benchmark.settings import settings
@@ -20,6 +22,13 @@ HISTORY_OPTION: list[str] | None = typer.Option(
 LIGHT_MODEL_OPTION: bool = typer.Option(
     default=False,
     help="軽量モデル (gpt-5.1-mini) を使用します。",
+)
+IMAGE_ARGUMENT = typer.Argument(
+    ...,
+    exists=True,
+    readable=True,
+    dir_okay=False,
+    help="解析する画像ファイルのパス",
 )
 
 
@@ -63,4 +72,17 @@ def agent_sdk_web_search(
     """OpenAIの組み込みWeb検索ツールをAgents SDK経由で呼び出します."""
     client = build_openai_web_search_tool(use_light_model=light_model)
     response = client.search(prompt, model=model)
+    typer.echo(response.content)
+
+
+@agent_sdk_app.command("vision")
+def agent_sdk_vision(
+    prompt: str,
+    image_path: Path = IMAGE_ARGUMENT,
+    light_model: bool = LIGHT_MODEL_OPTION,
+) -> None:
+    """OpenAI Agents SDK による画像付き推論を実行します."""
+    resolved_path = Path(image_path)
+    image_input = read_image_file(resolved_path)
+    response = _create_provider(use_light_model=light_model).vision(prompt, image_input)
     typer.echo(response.content)
