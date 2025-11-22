@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from typer.testing import CliRunner
@@ -52,7 +53,11 @@ class StubAgentProvider:
 def test_agent_complete_command(monkeypatch: pytest.MonkeyPatch) -> None:
     """Complete command should route to provider with given options."""
     stub_provider = StubAgentProvider()
-    monkeypatch.setattr(agent_cmd, "_create_provider", lambda: stub_provider)
+    def provider_factory(*, use_light_model: bool = False) -> StubAgentProvider:
+        assert use_light_model is False
+        return stub_provider
+
+    monkeypatch.setattr(agent_cmd, "_create_provider", provider_factory)
 
     result = runner.invoke(
         cli.app,
@@ -69,7 +74,11 @@ def test_agent_complete_command(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_agent_chat_command(monkeypatch: pytest.MonkeyPatch) -> None:
     """Chat command should assemble history and forward it."""
     stub_provider = StubAgentProvider()
-    monkeypatch.setattr(agent_cmd, "_create_provider", lambda: stub_provider)
+    def provider_factory(*, use_light_model: bool = False) -> StubAgentProvider:
+        assert use_light_model is False
+        return stub_provider
+
+    monkeypatch.setattr(agent_cmd, "_create_provider", provider_factory)
 
     result = runner.invoke(
         cli.app,
@@ -94,3 +103,44 @@ def test_agent_chat_command(monkeypatch: pytest.MonkeyPatch) -> None:
     assert call["messages"][0].content.startswith("You are an orchestration agent")
     assert call["messages"][1].role == "system"
     assert call["messages"][2].content == "help me"
+
+
+def test_agent_web_search_uses_resolver(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Web検索コマンドが指定オプションをResolverに渡すことを確認する."""
+    captured: dict[str, Any] = {}
+
+    def fake_resolver(provider: str, *, use_light_model: bool = False) -> SimpleNamespace:
+        captured["provider"] = provider
+        captured["use_light_model"] = use_light_model
+
+        def search(prompt: str, model: str | None = None) -> LLMResponse:
+            captured["prompt"] = prompt
+            captured["model"] = model
+            return LLMResponse(content="web-result", model=model or "default", raw={})
+
+        return SimpleNamespace(search=search)
+
+    monkeypatch.setattr(agent_cmd, "resolve_web_search_client", fake_resolver)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "agent",
+            "web-search",
+            "news",
+            "--provider",
+            "anthropic",
+            "--model",
+            "claude-4.5-sonnet",
+            "--light-model",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured == {
+        "provider": "anthropic",
+        "use_light_model": True,
+        "prompt": "news",
+        "model": "claude-4.5-sonnet",
+    }
+    assert "web-result" in result.stdout

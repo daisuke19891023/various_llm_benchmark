@@ -37,7 +37,11 @@ class StubAgentsProvider:
 def test_agent_sdk_complete(monkeypatch: pytest.MonkeyPatch) -> None:
     """Complete command should route to provider."""
     stub_provider = StubAgentsProvider()
-    monkeypatch.setattr(agent_sdk_cmd, "_create_provider", lambda: stub_provider)
+    def provider_factory(*, use_light_model: bool = False) -> StubAgentsProvider:
+        assert use_light_model is False
+        return stub_provider
+
+    monkeypatch.setattr(agent_sdk_cmd, "_create_provider", provider_factory)
 
     result = runner.invoke(cli.app, ["agent-sdk", "complete", "hello"])
 
@@ -49,7 +53,11 @@ def test_agent_sdk_complete(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_agent_sdk_chat(monkeypatch: pytest.MonkeyPatch) -> None:
     """Chat command should build history and forward it."""
     stub_provider = StubAgentsProvider()
-    monkeypatch.setattr(agent_sdk_cmd, "_create_provider", lambda: stub_provider)
+    def provider_factory(*, use_light_model: bool = False) -> StubAgentsProvider:
+        assert use_light_model is False
+        return stub_provider
+
+    monkeypatch.setattr(agent_sdk_cmd, "_create_provider", provider_factory)
 
     result = runner.invoke(
         cli.app,
@@ -71,3 +79,30 @@ def test_agent_sdk_chat(monkeypatch: pytest.MonkeyPatch) -> None:
     assert call["messages"][0].content.startswith("You are an assistant that helps")
     assert call["messages"][1].role == "system"
     assert call["messages"][2].content == "help me"
+
+
+def test_agent_sdk_web_search_uses_tool_builder(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Web検索コマンドがtool builderを通じて検索を実行する."""
+    captured: dict[str, Any] = {}
+
+    def fake_builder(*, use_light_model: bool = False) -> Any:
+        captured["use_light_model"] = use_light_model
+
+        class Tool:
+            def search(self, prompt: str, *, model: str | None = None) -> LLMResponse:
+                captured["prompt"] = prompt
+                captured["model"] = model
+                return LLMResponse(content="web-sdk", model=model or "stub", raw={})
+
+        return Tool()
+
+    monkeypatch.setattr(agent_sdk_cmd, "build_openai_web_search_tool", fake_builder)
+
+    result = runner.invoke(
+        cli.app,
+        ["agent-sdk", "web-search", "topic", "--model", "gpt-5.1", "--light-model"],
+    )
+
+    assert result.exit_code == 0
+    assert captured == {"use_light_model": True, "prompt": "topic", "model": "gpt-5.1"}
+    assert "web-sdk" in result.stdout

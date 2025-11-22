@@ -60,3 +60,8 @@ def _extract_content(content: Any) -> str:
         return _extract_content(nested_content)
 
     return str(content)
+
+
+def extract_openai_content(content: Any) -> str:
+    """Public wrapper for parsing OpenAI response content."""
+    return _extract_content(content)

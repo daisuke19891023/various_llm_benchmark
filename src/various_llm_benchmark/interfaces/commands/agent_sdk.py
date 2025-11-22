@@ -6,6 +6,7 @@ import typer
 
 from various_llm_benchmark.agents.providers import OpenAIAgentsProvider
 from various_llm_benchmark.interfaces.commands.common import build_messages
+from various_llm_benchmark.interfaces.commands.web_search_clients import build_openai_web_search_tool
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
 from various_llm_benchmark.settings import settings
 
@@ -16,6 +17,10 @@ HISTORY_OPTION: list[str] | None = typer.Option(
     help="'role:content' 形式の履歴を複数回指定できます。",
     show_default=False,
 )
+LIGHT_MODEL_OPTION: bool = typer.Option(
+    default=False,
+    help="軽量モデル (gpt-5.1-mini) を使用します。",
+)
 
 
 @lru_cache(maxsize=1)
@@ -23,25 +28,39 @@ def _prompt_template() -> PromptTemplate:
     return load_provider_prompt("agents", "openai_agents")
 
 
-def _create_provider() -> OpenAIAgentsProvider:
+def _create_provider(*, use_light_model: bool = False) -> OpenAIAgentsProvider:
     return OpenAIAgentsProvider(
         api_key=settings.openai_api_key.get_secret_value(),
-        model=settings.openai_model,
+        model=settings.openai_light_model if use_light_model else settings.openai_model,
         instructions=_prompt_template().system,
         temperature=settings.default_temperature,
     )
 
 
 @agent_sdk_app.command("complete")
-def agent_sdk_complete(prompt: str) -> None:
+def agent_sdk_complete(prompt: str, light_model: bool = LIGHT_MODEL_OPTION) -> None:
     """OpenAI Agents SDK による単発応答を実行します."""
-    response = _create_provider().complete(prompt)
+    response = _create_provider(use_light_model=light_model).complete(prompt)
     typer.echo(response.content)
 
 
 @agent_sdk_app.command("chat")
-def agent_sdk_chat(prompt: str, history: list[str] | None = HISTORY_OPTION) -> None:
+def agent_sdk_chat(
+    prompt: str, history: list[str] | None = HISTORY_OPTION, light_model: bool = LIGHT_MODEL_OPTION,
+) -> None:
     """OpenAI Agents SDK による履歴付き応答を実行します."""
     messages = build_messages(prompt, history or [], system_prompt=_prompt_template().system)
-    response = _create_provider().chat(messages)
+    response = _create_provider(use_light_model=light_model).chat(messages)
+    typer.echo(response.content)
+
+
+@agent_sdk_app.command("web-search")
+def agent_sdk_web_search(
+    prompt: str,
+    model: str | None = typer.Option(default=None, help="モデル名を上書きします。"),
+    light_model: bool = LIGHT_MODEL_OPTION,
+) -> None:
+    """OpenAIの組み込みWeb検索ツールをAgents SDK経由で呼び出します."""
+    client = build_openai_web_search_tool(use_light_model=light_model)
+    response = client.search(prompt, model=model)
     typer.echo(response.content)
