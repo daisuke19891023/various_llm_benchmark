@@ -10,7 +10,7 @@ from agno.models.google import Gemini
 from agno.models.message import Message
 from agno.models.openai import OpenAIChat
 
-from various_llm_benchmark.models import ChatMessage, LLMResponse
+from various_llm_benchmark.models import ChatMessage, ImageInput, LLMResponse
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -81,6 +81,28 @@ class AgnoAgentProvider:
         agent, model_obj = self._build_agent(provider, model)
         agno_messages = [self._to_agno_message(message) for message in messages]
         run_output = cast("RunResult", agent.run(agno_messages, stream=False))
+        return self._build_response(run_output, model_obj)
+
+    def vision(
+        self,
+        prompt: str,
+        image: ImageInput,
+        *,
+        provider: ProviderName,
+        model: str | None = None,
+    ) -> LLMResponse:
+        """Generate a response using an image input."""
+        agent, model_obj = self._build_agent(provider, model)
+        run_input = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": image.as_data_url()},
+                ],
+            },
+        ]
+        run_output = cast("RunResult", agent.run(run_input, stream=False))
         return self._build_response(run_output, model_obj)
 
     def _build_agent(

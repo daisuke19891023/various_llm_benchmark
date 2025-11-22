@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 from various_llm_benchmark.llm.protocol import LLMClient
-from various_llm_benchmark.models import ChatMessage, LLMResponse
+from various_llm_benchmark.models import ChatMessage, ImageInput, LLMResponse
 
 if TYPE_CHECKING:
     from anthropic import Anthropic
@@ -45,6 +45,50 @@ class AnthropicLLMClient(LLMClient):
             max_tokens=1024,
             temperature=self._temperature,
         )
+        content_data = cast("list[Any] | str", response.content)
+        content = _extract_text(content_data)
+        return LLMResponse(content=content, model=response.model, raw=response.model_dump())
+
+    def vision(
+        self,
+        prompt: str,
+        image: ImageInput,
+        *,
+        model: str | None = None,
+        system_prompt: str | None = None,
+    ) -> LLMResponse:
+        """Generate a completion using an image payload."""
+        messages = cast(
+            "list[MessageParam]",
+            [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": image.media_type,
+                                "data": image.data,
+                            },
+                        },
+                    ],
+                },
+            ],
+        )
+
+        request_kwargs: dict[str, object] = {
+            "model": model or self._default_model,
+            "messages": messages,
+            "max_tokens": 1024,
+            "temperature": self._temperature,
+        }
+        if system_prompt is not None:
+            request_kwargs["system"] = system_prompt
+
+        messages_client = cast("Any", self._client.messages)
+        response = messages_client.create(**request_kwargs)
         content_data = cast("list[Any] | str", response.content)
         content = _extract_text(content_data)
         return LLMResponse(content=content, model=response.model, raw=response.model_dump())

@@ -1,1 +1,2 @@
-"""LLM provider tests."""
+"""Tests for LLM provider adapters."""
+

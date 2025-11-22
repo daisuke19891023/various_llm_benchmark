@@ -8,7 +8,7 @@ from agents.items import ItemHelpers, TResponseInputItem
 from agents.model_settings import ModelSettings
 from agents.run import Runner
 
-from various_llm_benchmark.models import ChatMessage, LLMResponse
+from various_llm_benchmark.models import ChatMessage, ImageInput, LLMResponse
 
 if TYPE_CHECKING:
     from agents.result import RunResult
@@ -51,6 +51,24 @@ class OpenAIAgentsProvider:
         """Generate a response using chat-style history."""
         agent = self._build_agent()
         run_input: list[TResponseInputItem] = [self._to_agent_message(message) for message in messages]
+        run_result = self._run_function(agent, run_input)
+        return self._to_response(run_result)
+
+    def vision(self, prompt: str, image: ImageInput) -> LLMResponse:
+        """Generate a response that includes image content."""
+        agent = self._build_agent()
+        run_input: list[TResponseInputItem] = [
+            cast(
+                "TResponseInputItem",
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": prompt},
+                        {"type": "input_image", "image_url": image.as_data_url()},
+                    ],
+                },
+            ),
+        ]
         run_result = self._run_function(agent, run_input)
         return self._to_response(run_result)
 
