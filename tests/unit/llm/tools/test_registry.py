@@ -21,8 +21,10 @@ def test_register_and_retrieve_tool() -> None:
     """Registration should persist and be retrievable by id."""
     registration = ToolRegistration(
         id="test/tool",
+        name="test-tool",
         description="example",
         input_schema={"type": "object"},
+        tags=set(),
         handler=_noop_handler,
         category=ToolCategory.BUILTIN,
     )
@@ -38,8 +40,10 @@ def test_list_tools_filters_by_category() -> None:
     """Tools can be filtered by category when listed."""
     external_tool = ToolRegistration(
         id="external/tool",
+        name="external-tool",
         description="external",
         input_schema={"type": "object"},
+        tags={"external"},
         handler=_noop_handler,
         category=ToolCategory.EXTERNAL,
     )
@@ -56,8 +60,10 @@ def test_registering_duplicate_tool_is_rejected() -> None:
     """Duplicate tool identifiers raise a ValueError."""
     duplicate = ToolRegistration(
         id="duplicate/tool",
+        name="duplicate-tool",
         description="first",
         input_schema={"type": "object"},
+        tags=set(),
         handler=_noop_handler,
         category=ToolCategory.MCP,
     )
@@ -71,8 +77,10 @@ def test_category_mismatch_raises_lookup_error() -> None:
     """Retrieving with mismatched category should raise LookupError."""
     mismatched = ToolRegistration(
         id="mismatch/tool",
+        name="mismatch-tool",
         description="mismatch",
         input_schema={"type": "object"},
+        tags=set(),
         handler=_noop_handler,
         category=ToolCategory.BUILTIN,
     )

@@ -9,6 +9,14 @@ from anthropic import Anthropic
 from google import genai
 from openai import OpenAI
 
+from various_llm_benchmark.llm.tools import ToolSelector
+from various_llm_benchmark.llm.tools.registry import (
+    NativeToolType,
+    ToolCategory,
+    ToolRegistration,
+    WEB_SEARCH_TAG,
+    register_tool,
+)
 from various_llm_benchmark.llm.tools.web_search import (
     AnthropicWebSearchTool,
     GeminiWebSearchTool,
@@ -16,12 +24,6 @@ from various_llm_benchmark.llm.tools.web_search import (
     SupportsMessages,
     SupportsResponses,
     SupportsSearchModels,
-)
-from various_llm_benchmark.llm.tools.registry import (
-    ToolCategory,
-    ToolRegistration,
-    get_tool,
-    register_tool,
 )
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
 from various_llm_benchmark.settings import settings
@@ -133,8 +135,11 @@ def _register_web_search_tool(
     register_tool(
         ToolRegistration(
             id=_tool_id(provider),
+            name=f"{provider}-web-search",
             description=description,
             input_schema=WEB_SEARCH_INPUT_SCHEMA,
+            tags={WEB_SEARCH_TAG, f"provider:{provider}"},
+            native_type=NativeToolType.WEB_SEARCH,
             handler=handler,
             category=ToolCategory.BUILTIN,
         ),
@@ -200,6 +205,12 @@ def resolve_web_search_client(
 ) -> WebSearchExecutor:
     """Construct a callable search executor from the registry."""
     _ensure_web_search_tools_registered()
-    registration = get_tool(_tool_id(provider), category=category)
+    selector = ToolSelector()
+    registration = selector.select_one(
+        category=category,
+        names=[f"{provider}-web-search"],
+        tags=[WEB_SEARCH_TAG, f"provider:{provider}"],
+        ids=[_tool_id(provider)],
+    )
     handler = cast("WebSearchHandler", registration.handler)
     return cast("WebSearchExecutor", partial(handler, use_light_model=use_light_model))

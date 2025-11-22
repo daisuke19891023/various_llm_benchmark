@@ -17,16 +17,28 @@ class ToolCategory(StrEnum):
     EXTERNAL = "external"
 
 
+class NativeToolType(StrEnum):
+    """Known LLM-native tools handled by the provider itself."""
+
+    WEB_SEARCH = "web_search"
+
+
 class ToolRegistration(BaseModel):
     """Structured metadata for a tool entry in the registry."""
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     id: str = Field(min_length=1)
+    name: str = Field(min_length=1)
     description: str
     input_schema: dict[str, Any]
+    tags: set[str] = Field(default_factory=set)
+    native_type: NativeToolType | None = None
     handler: typing.Callable[..., Any]
     category: ToolCategory
+
+
+WEB_SEARCH_TAG = "web_search"
 
 
 _registry: dict[str, ToolRegistration] = {}
