@@ -23,13 +23,13 @@ PROVIDER_OPTION = typer.Option(
     "--provider",
     "-p",
     case_sensitive=False,
-    help="利用するプロバイダー (openai または anthropic)",
+    help="利用するプロバイダー (openai / anthropic / gemini)",
 )
 
 MODEL_OPTION: str | None = typer.Option(default=None, help="モデル名を上書きします。")
 LIGHT_MODEL_OPTION: bool = typer.Option(
     default=False,
-    help="軽量モデル (gpt-5.1-mini / claude-4.5-haiku) を使用します。",
+    help="軽量モデル (gpt-5.1-mini / claude-4.5-haiku / gemini-2.5-flash) を使用します。",
 )
 
 
@@ -44,11 +44,14 @@ def _create_provider(*, use_light_model: bool = False) -> AgnoAgentProvider:
     anthropic_model = (
         settings.anthropic_light_model if use_light_model else settings.anthropic_model
     )
+    gemini_model = settings.gemini_light_model if use_light_model else settings.gemini_model
     return AgnoAgentProvider(
         openai_api_key=settings.openai_api_key.get_secret_value(),
         anthropic_api_key=settings.anthropic_api_key.get_secret_value(),
+        gemini_api_key=settings.gemini_api_key.get_secret_value(),
         openai_model=openai_model,
         anthropic_model=anthropic_model,
+        gemini_model=gemini_model,
         temperature=settings.default_temperature,
         instructions=prompt_template.system,
     )

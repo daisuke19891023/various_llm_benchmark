@@ -1,6 +1,6 @@
 # various-llm-benchmark
 
-TyperベースのCLIで複数のLLMやエージェントフレームワークを試すためのサンドボックスです。OpenAI(Responses API)とAnthropic(Claude)に加えてGeminiのシンプルなテキスト生成と対話履歴付き応答、Agnoによるエージェント呼び出し、OpenAI Agents SDKによるエージェント呼び出しをサポートしています。
+TyperベースのCLIで複数のLLMやエージェントフレームワークを試すためのサンドボックスです。OpenAI(Responses API)とAnthropic(Claude)に加えてGeminiのシンプルなテキスト生成と対話履歴付き応答、Agnoによるエージェント呼び出し、OpenAI Agents SDKによるエージェント呼び出し、組み込みWeb検索ツールの呼び出し(OpenAI/Claude/Gemini)をサポートしています。
 
 ## セットアップ
 1. 依存関係をインストールします。
@@ -52,7 +52,7 @@ uv run various-llm-benchmark agent chat "次に何をすべき？" \
   --history "system:あなたはタスク分解が得意です" \
   --history "user:準備済みのリソースは？"
 ```
-`--provider`オプションで`openai`または`anthropic`を切り替え、`--model`でモデル名を上書きできます。
+`--provider`オプションで`openai` / `anthropic` / `gemini`を切り替え、`--model`でモデル名を上書きできます。
 
 ### Agent (OpenAI Agents SDK)
 ```bash
@@ -67,11 +67,12 @@ uv run various-llm-benchmark agent-sdk chat "次に何をすべき？" \
 - Web検索ツールは`tools`サブコマンドに加えて`agent` / `agent-sdk`からも呼び出せます。
 
 ### ツール呼び出し (Web Search)
-OpenAI/Claudeの組み込みWeb検索ツールを使った呼び出しを行えます。
+OpenAI/Claude/Geminiの組み込みWeb検索ツールを使った呼び出しを行えます。
 
 ```bash
 uv run various-llm-benchmark tools web-search "最新のAIニュースをまとめて" --provider openai
 uv run various-llm-benchmark tools web-search "ドキュメントの更新点を調べて" --provider anthropic
+uv run various-llm-benchmark tools web-search "最新の検索結果を教えて" --provider gemini
 uv run various-llm-benchmark agent web-search "設計指針を調査して" --provider openai --light-model
 uv run various-llm-benchmark agent-sdk web-search "最新のAPI例を調べて" --light-model
 ```

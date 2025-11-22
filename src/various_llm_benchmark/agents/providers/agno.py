@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Literal, Protocol, cast
 
 from agno.agent import Agent
 from agno.models.anthropic import Claude
+from agno.models.google import Gemini
 from agno.models.message import Message
 from agno.models.openai import OpenAIChat
 
@@ -13,6 +14,9 @@ from various_llm_benchmark.models import ChatMessage, LLMResponse
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+
+AgentModel = OpenAIChat | Claude | Gemini
 
 
 class AgentRunner(Protocol):
@@ -34,7 +38,7 @@ class RunResult(Protocol):
     __dataclass_fields__: object | None
 
 
-ProviderName = Literal["openai", "anthropic"]
+ProviderName = Literal["openai", "anthropic", "gemini"]
 
 
 class AgnoAgentProvider:
@@ -44,18 +48,22 @@ class AgnoAgentProvider:
         self,
         openai_api_key: str,
         anthropic_api_key: str,
+        gemini_api_key: str,
         openai_model: str,
         anthropic_model: str,
+        gemini_model: str,
         *,
         temperature: float = 0.7,
         instructions: str | None = None,
-        agent_factory: Callable[[OpenAIChat | Claude], object] | None = None,
+        agent_factory: Callable[[AgentModel], object] | None = None,
     ) -> None:
         """Configure the provider with API keys and defaults."""
         self._openai_api_key = openai_api_key
         self._anthropic_api_key = anthropic_api_key
+        self._gemini_api_key = gemini_api_key
         self._openai_model = openai_model
         self._anthropic_model = anthropic_model
+        self._gemini_model = gemini_model
         self._temperature = temperature
         self._instructions = instructions
         self._agent_factory = agent_factory or self._default_agent_factory
@@ -75,29 +83,37 @@ class AgnoAgentProvider:
         run_output = cast("RunResult", agent.run(agno_messages, stream=False))
         return self._build_response(run_output, model_obj)
 
-    def _build_agent(self, provider: ProviderName, model: str | None) -> tuple[AgentRunner, OpenAIChat | Claude]:
+    def _build_agent(
+        self, provider: ProviderName, model: str | None,
+    ) -> tuple[AgentRunner, AgentModel]:
         model_obj = self._create_model(provider, model)
         runner = cast("AgentRunner", self._agent_factory(model_obj))
         return runner, model_obj
 
-    def _create_model(self, provider: ProviderName, model: str | None) -> OpenAIChat | Claude:
+    def _create_model(self, provider: ProviderName, model: str | None) -> AgentModel:
         if provider == "openai":
             return OpenAIChat(
                 id=model or self._openai_model,
                 temperature=self._temperature,
                 api_key=self._openai_api_key,
             )
-        return Claude(
-            id=model or self._anthropic_model,
+        if provider == "anthropic":
+            return Claude(
+                id=model or self._anthropic_model,
+                temperature=self._temperature,
+                api_key=self._anthropic_api_key,
+            )
+        return Gemini(
+            id=model or self._gemini_model,
             temperature=self._temperature,
-            api_key=self._anthropic_api_key,
+            api_key=self._gemini_api_key,
         )
 
     @staticmethod
     def _to_agno_message(message: ChatMessage) -> Message:
         return Message(role=message.role, content=message.content)
 
-    def _build_response(self, run_output: RunResult, model: OpenAIChat | Claude) -> LLMResponse:
+    def _build_response(self, run_output: RunResult, model: AgentModel) -> LLMResponse:
         content = self._extract_content(run_output)
         model_name = run_output.model or model.id
         raw_output = run_output.__dict__.copy()
@@ -114,5 +130,5 @@ class AgnoAgentProvider:
                 return content
         return str(run_output.content)
 
-    def _default_agent_factory(self, model: OpenAIChat | Claude) -> AgentRunner:
+    def _default_agent_factory(self, model: AgentModel) -> AgentRunner:
         return cast("AgentRunner", Agent(model=model, instructions=self._instructions))
