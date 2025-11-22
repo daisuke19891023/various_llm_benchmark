@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from types import SimpleNamespace
 
-from various_llm_benchmark.llm.protocol import ChatMessage
 from various_llm_benchmark.llm.providers.openai.client import OpenAILLMClient
+from various_llm_benchmark.models import ChatMessage
 
 if TYPE_CHECKING:
     from pytest_mock import MockerFixture

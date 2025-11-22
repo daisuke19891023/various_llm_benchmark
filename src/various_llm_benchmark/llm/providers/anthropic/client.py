@@ -3,7 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
-from various_llm_benchmark.llm.protocol import ChatMessage, LLMClient, LLMResponse
+from various_llm_benchmark.llm.protocol import LLMClient
+from various_llm_benchmark.models import ChatMessage, LLMResponse
 
 if TYPE_CHECKING:
     from anthropic import Anthropic

@@ -9,7 +9,7 @@ from agno.models.anthropic import Claude
 from agno.models.message import Message
 from agno.models.openai import OpenAIChat
 
-from various_llm_benchmark.llm.protocol import ChatMessage, LLMResponse
+from various_llm_benchmark.models import ChatMessage, LLMResponse
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -48,6 +48,7 @@ class AgnoAgentProvider:
         anthropic_model: str,
         *,
         temperature: float = 0.7,
+        instructions: str | None = None,
         agent_factory: Callable[[OpenAIChat | Claude], object] | None = None,
     ) -> None:
         """Configure the provider with API keys and defaults."""
@@ -56,6 +57,7 @@ class AgnoAgentProvider:
         self._openai_model = openai_model
         self._anthropic_model = anthropic_model
         self._temperature = temperature
+        self._instructions = instructions
         self._agent_factory = agent_factory or self._default_agent_factory
 
     def complete(self, prompt: str, *, provider: ProviderName, model: str | None = None) -> LLMResponse:
@@ -112,6 +114,5 @@ class AgnoAgentProvider:
                 return content
         return str(run_output.content)
 
-    @staticmethod
-    def _default_agent_factory(model: OpenAIChat | Claude) -> AgentRunner:
-        return cast("AgentRunner", Agent(model=model))
+    def _default_agent_factory(self, model: OpenAIChat | Claude) -> AgentRunner:
+        return cast("AgentRunner", Agent(model=model, instructions=self._instructions))

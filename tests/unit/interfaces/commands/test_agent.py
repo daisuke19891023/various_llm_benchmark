@@ -8,7 +8,7 @@ from typer.testing import CliRunner
 
 from various_llm_benchmark.interfaces import cli
 from various_llm_benchmark.interfaces.commands import agent as agent_cmd
-from various_llm_benchmark.llm.protocol import ChatMessage, LLMResponse
+from various_llm_benchmark.models import ChatMessage, LLMResponse
 
 if TYPE_CHECKING:
     import pytest
@@ -85,11 +85,12 @@ def test_agent_chat_command(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     assert result.exit_code == 0
-    assert "2 messages" in result.stdout
+    assert "3 messages" in result.stdout
     assert len(stub_provider.calls) == 1
     call = stub_provider.calls[0]
     assert call["kind"] == "chat"
     assert call["provider"] == "openai"
-    assert len(call["messages"]) == 2
-    assert call["messages"][0].role == "system"
-    assert call["messages"][1].content == "help me"
+    assert len(call["messages"]) == 3
+    assert call["messages"][0].content.startswith("You are an orchestration agent")
+    assert call["messages"][1].role == "system"
+    assert call["messages"][2].content == "help me"
