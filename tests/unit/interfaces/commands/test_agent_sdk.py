@@ -8,6 +8,7 @@ from typer.testing import CliRunner
 
 from various_llm_benchmark.interfaces import cli
 from various_llm_benchmark.interfaces.commands import agent_sdk as agent_sdk_cmd
+from various_llm_benchmark.llm.tools.registry import ToolCategory
 from various_llm_benchmark.models import ChatMessage, LLMResponse
 
 if TYPE_CHECKING:
@@ -81,22 +82,28 @@ def test_agent_sdk_chat(monkeypatch: pytest.MonkeyPatch) -> None:
     assert call["messages"][2].content == "help me"
 
 
-def test_agent_sdk_web_search_uses_tool_builder(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Web検索コマンドがtool builderを通じて検索を実行する."""
+def test_agent_sdk_web_search_uses_resolver(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Web検索コマンドがresolver経由で検索を実行する."""
     captured: dict[str, Any] = {}
 
-    def fake_builder(*, use_light_model: bool = False) -> Any:
+    def fake_resolver(
+        provider: str,
+        *,
+        category: ToolCategory = ToolCategory.BUILTIN,
+        use_light_model: bool = False,
+    ) -> object:
+        captured["provider"] = provider
+        captured["category"] = category
         captured["use_light_model"] = use_light_model
 
-        class Tool:
-            def search(self, prompt: str, *, model: str | None = None) -> LLMResponse:
-                captured["prompt"] = prompt
-                captured["model"] = model
-                return LLMResponse(content="web-sdk", model=model or "stub", raw={})
+        def search(prompt: str, model: str | None = None) -> LLMResponse:
+            captured["prompt"] = prompt
+            captured["model"] = model
+            return LLMResponse(content="web-sdk", model=model or "stub", raw={})
 
-        return Tool()
+        return search
 
-    monkeypatch.setattr(agent_sdk_cmd, "build_openai_web_search_tool", fake_builder)
+    monkeypatch.setattr(agent_sdk_cmd, "resolve_web_search_client", fake_resolver)
 
     result = runner.invoke(
         cli.app,
@@ -104,5 +111,11 @@ def test_agent_sdk_web_search_uses_tool_builder(monkeypatch: pytest.MonkeyPatch)
     )
 
     assert result.exit_code == 0
-    assert captured == {"use_light_model": True, "prompt": "topic", "model": "gpt-5.1"}
+    assert captured == {
+        "provider": "openai",
+        "category": ToolCategory.BUILTIN,
+        "use_light_model": True,
+        "prompt": "topic",
+        "model": "gpt-5.1",
+    }
     assert "web-sdk" in result.stdout

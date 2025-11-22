@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 from typer.testing import CliRunner
 
 from various_llm_benchmark.interfaces.cli import app
+from various_llm_benchmark.llm.tools.registry import ToolCategory
 from various_llm_benchmark.models import LLMResponse
 
 if TYPE_CHECKING:
@@ -18,17 +18,21 @@ def test_tools_web_search_openai(monkeypatch: pytest.MonkeyPatch) -> None:
     """OpenAI provider should be used when selected."""
     captured: list[tuple[str, str | None]] = []
 
-    def fake_openai_client() -> SimpleNamespace:
+    def fake_resolver(
+        provider: str,
+        *,
+        category: ToolCategory = ToolCategory.BUILTIN,
+        use_light_model: bool = False,
+    ) -> object:
+        assert provider == "openai"
+        assert category is ToolCategory.BUILTIN
+        assert use_light_model is False
+
         def search(prompt: str, model: str | None = None) -> LLMResponse:
             captured.append((prompt, model))
             return LLMResponse(content="openai-result", model=model or "m", raw={"source": "test"})
 
-        return SimpleNamespace(search=search)
-
-    def fake_resolver(provider: str, *, use_light_model: bool = False) -> SimpleNamespace:
-        assert provider == "openai"
-        assert use_light_model is False
-        return fake_openai_client()
+        return search
 
     monkeypatch.setattr(
         "various_llm_benchmark.interfaces.commands.tools.resolve_web_search_client",
@@ -46,17 +50,21 @@ def test_tools_web_search_anthropic(monkeypatch: pytest.MonkeyPatch) -> None:
     """Claude provider should respond when selected."""
     captured: list[tuple[str, str | None]] = []
 
-    def fake_anthropic_client() -> SimpleNamespace:
+    def fake_resolver(
+        provider: str,
+        *,
+        category: ToolCategory = ToolCategory.BUILTIN,
+        use_light_model: bool = False,
+    ) -> object:
+        assert provider == "anthropic"
+        assert category is ToolCategory.BUILTIN
+        assert use_light_model is True
+
         def search(prompt: str, model: str | None = None) -> LLMResponse:
             captured.append((prompt, model))
             return LLMResponse(content="claude-result", model=model or "m", raw={"source": "test"})
 
-        return SimpleNamespace(search=search)
-
-    def fake_resolver(provider: str, *, use_light_model: bool = False) -> SimpleNamespace:
-        assert provider == "anthropic"
-        assert use_light_model is True
-        return fake_anthropic_client()
+        return search
 
     monkeypatch.setattr(
         "various_llm_benchmark.interfaces.commands.tools.resolve_web_search_client",
