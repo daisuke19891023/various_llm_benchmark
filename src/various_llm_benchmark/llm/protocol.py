@@ -1,23 +1,11 @@
+"""Protocols for LLM providers."""
+
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
-from pydantic import BaseModel
-
-
-class ChatMessage(BaseModel):
-    """Represents a single chat message."""
-
-    role: str
-    content: str
-
-
-class LLMResponse(BaseModel):
-    """Normalized response from an LLM provider."""
-
-    content: str
-    model: str
-    raw: dict[str, object]
+if TYPE_CHECKING:
+    from various_llm_benchmark.models import ChatMessage, LLMResponse
 
 
 @runtime_checkable

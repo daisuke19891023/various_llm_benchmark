@@ -1,6 +1,6 @@
 # various-llm-benchmark
 
-TyperベースのCLIで複数のLLMやエージェントフレームワークを試すためのサンドボックスです。現状はOpenAI(Responses API)とAnthropic(Claude)のシンプルなテキスト生成と対話履歴付き応答を提供します。Agnoを用いたエージェント呼び出しもサポートしています。
+TyperベースのCLIで複数のLLMやエージェントフレームワークを試すためのサンドボックスです。現状はOpenAI(Responses API)とAnthropic(Claude)のシンプルなテキスト生成と対話履歴付き応答に加え、Agnoによるエージェント呼び出しとOpenAI Agents SDKによるエージェント呼び出しをサポートしています。
 
 ## セットアップ
 1. 依存関係をインストールします。
@@ -8,6 +8,11 @@ TyperベースのCLIで複数のLLMやエージェントフレームワークを
    uv sync --extra dev
    ```
 2. `.env.example`を参考に`.env`を作成し、各APIキーを設定します。
+
+## プロンプト管理
+- システムプロンプトは`src/various_llm_benchmark/prompts/`以下のYAMLで管理します。
+- LLMプロバイダーは`prompts/llm/providers/<provider>.yaml`、エージェントプロバイダーは`prompts/agents/providers/<provider>.yaml`に対応するファイルを追加してください。
+- CLIはこれらのYAMLを読み込んでシステムメッセージやAgents SDKのinstructionsとして適用します。
 
 ## 使い方
 インストール後、以下のようにCLIを実行できます。
@@ -40,6 +45,14 @@ uv run various-llm-benchmark agent chat "次に何をすべき？" \
   --history "user:準備済みのリソースは？"
 ```
 `--provider`オプションで`openai`または`anthropic`を切り替え、`--model`でモデル名を上書きできます。
+
+### Agent (OpenAI Agents SDK)
+```bash
+uv run various-llm-benchmark agent-sdk complete "ファイル構成を教えて"
+uv run various-llm-benchmark agent-sdk chat "次に何をすべき？" \
+  --history "system:あなたはタスク分解が得意です" \
+  --history "user:準備済みのリソースは？"
+```
 
 ## 開発
 - 設定は`pydantic-settings`経由で読み込みます。環境変数を直接参照せず`Settings`を利用してください。

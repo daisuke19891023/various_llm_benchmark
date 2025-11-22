@@ -10,10 +10,11 @@ from agno.models.openai import OpenAIChat
 from agno.run.agent import RunOutput
 
 from various_llm_benchmark.agents.providers.agno import AgnoAgentProvider
-from various_llm_benchmark.llm.protocol import ChatMessage
+from various_llm_benchmark.models import ChatMessage
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    import pytest
 
 
 class DummyAgent:
@@ -94,3 +95,42 @@ def test_chat_appends_prompt_and_uses_history() -> None:
         ("assistant", "answer1"),
         ("user", "next"),
     ]
+
+
+def test_default_agent_factory_applies_instructions(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default agent factory should pass instructions to the Agno Agent."""
+    created_agents: list["StubAgent"] = []
+
+    class StubRunResult:
+        def __init__(self, model_id: str) -> None:
+            self.content = "ok"
+            self.messages = None
+            self.model = model_id
+
+    class StubAgent:
+        def __init__(self, model: OpenAIChat | Claude, instructions: str | None = None) -> None:
+            self.model = model
+            self.instructions = instructions
+            self.inputs: list[object] = []
+            created_agents.append(self)
+
+        def run(self, run_input: object, **_: object) -> StubRunResult:
+            self.inputs.append(run_input)
+            return StubRunResult(self.model.id)
+
+    monkeypatch.setattr("various_llm_benchmark.agents.providers.agno.Agent", StubAgent)
+
+    provider = AgnoAgentProvider(
+        openai_api_key="openai-key",
+        anthropic_api_key="anthropic-key",
+        openai_model="gpt-test",
+        anthropic_model="claude-test",
+        temperature=0.5,
+        instructions="follow steps",
+    )
+
+    response = provider.complete("Hello", provider="openai")
+
+    assert response.content == "ok"
+    assert created_agents[0].instructions == "follow steps"
+    assert created_agents[0].inputs == ["Hello"]

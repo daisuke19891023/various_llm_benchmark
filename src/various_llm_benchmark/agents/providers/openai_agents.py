@@ -1,0 +1,85 @@
+from __future__ import annotations
+
+import asyncio
+from typing import TYPE_CHECKING, Protocol, cast
+
+from agents import Agent, set_default_openai_key
+from agents.items import ItemHelpers, TResponseInputItem
+from agents.model_settings import ModelSettings
+from agents.run import Runner
+
+from various_llm_benchmark.models import ChatMessage, LLMResponse
+
+if TYPE_CHECKING:
+    from agents.result import RunResult
+
+
+class AgentRunFunction(Protocol):
+    """Callable that executes an Agents SDK run synchronously."""
+
+    def __call__(self, agent: Agent, run_input: str | list[TResponseInputItem]) -> RunResult:
+        """Execute the agent with the given input and return the run result."""
+        ...
+
+
+class OpenAIAgentsProvider:
+    """Wrapper around the OpenAI Agents SDK for simple completions and chats."""
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        *,
+        instructions: str,
+        temperature: float = 0.7,
+        run_function: AgentRunFunction | None = None,
+    ) -> None:
+        """Configure the provider and default agent settings."""
+        set_default_openai_key(api_key, use_for_tracing=False)
+        self._model = model
+        self._instructions = instructions
+        self._temperature = temperature
+        self._run_function = run_function or self._default_run_function
+
+    def complete(self, prompt: str) -> LLMResponse:
+        """Generate a single-turn response via Agents SDK."""
+        agent = self._build_agent()
+        run_result = self._run_function(agent, prompt)
+        return self._to_response(run_result)
+
+    def chat(self, messages: list[ChatMessage]) -> LLMResponse:
+        """Generate a response using chat-style history."""
+        agent = self._build_agent()
+        run_input: list[TResponseInputItem] = [self._to_agent_message(message) for message in messages]
+        run_result = self._run_function(agent, run_input)
+        return self._to_response(run_result)
+
+    def _build_agent(self) -> Agent:
+        return Agent(
+            name="openai-agents-sdk",
+            instructions=self._instructions,
+            model=self._model,
+            model_settings=ModelSettings(temperature=self._temperature),
+        )
+
+    @staticmethod
+    def _to_agent_message(message: ChatMessage) -> TResponseInputItem:
+        return cast("TResponseInputItem", {"role": message.role, "content": message.content})
+
+    def _to_response(self, run_result: RunResult) -> LLMResponse:
+        content = self._extract_content(run_result)
+        raw_output = run_result.__dict__.copy()
+        return LLMResponse(content=content, model=self._model, raw=raw_output)
+
+    @staticmethod
+    def _extract_content(run_result: RunResult) -> str:
+        if isinstance(run_result.final_output, str):
+            return run_result.final_output
+        text = ItemHelpers.text_message_outputs(run_result.new_items)
+        if text:
+            return text
+        return str(run_result.final_output)
+
+    @staticmethod
+    def _default_run_function(agent: Agent, run_input: str | list[TResponseInputItem]) -> RunResult:
+        return asyncio.run(Runner.run(starting_agent=agent, input=run_input))

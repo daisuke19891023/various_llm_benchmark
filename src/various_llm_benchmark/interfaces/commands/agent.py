@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from functools import lru_cache
+
 import typer
 
 from various_llm_benchmark.agents.providers import AgnoAgentProvider, ProviderName
 from various_llm_benchmark.interfaces.commands.common import build_messages
+from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
 from various_llm_benchmark.settings import settings
 
 agent_app = typer.Typer(help="Agnoエージェントを呼び出します。")
@@ -22,13 +25,21 @@ PROVIDER_OPTION = typer.Option(
     help="利用するプロバイダー (openai または anthropic)",
 )
 
+
+@lru_cache(maxsize=1)
+def _prompt_template() -> PromptTemplate:
+    return load_provider_prompt("agents", "agno")
+
+
 def _create_provider() -> AgnoAgentProvider:
+    prompt_template = _prompt_template()
     return AgnoAgentProvider(
         openai_api_key=settings.openai_api_key.get_secret_value(),
         anthropic_api_key=settings.anthropic_api_key.get_secret_value(),
         openai_model=settings.openai_model,
         anthropic_model=settings.anthropic_model,
         temperature=settings.default_temperature,
+        instructions=prompt_template.system,
     )
 
 
@@ -51,6 +62,6 @@ def agent_chat(
     model: str | None = typer.Option(None, help="モデル名を上書きします。"),
 ) -> None:
     """Generate an Agno agent response that includes history."""
-    messages = build_messages(prompt, history or [])
+    messages = build_messages(prompt, history or [], system_prompt=_prompt_template().system)
     response = _create_provider().chat(messages, provider=provider, model=model)
     typer.echo(response.content)

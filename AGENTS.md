@@ -24,6 +24,7 @@ project_root/
 ├─ .env.example
 └─ (configs like pyproject.toml, noxfile.py, pyrightconfig.json exist in repo)
 ```
+System prompts live under `src/various_llm_benchmark/prompts/` as YAML files mirroring provider paths (e.g., `prompts/llm/providers/openai.yaml`). Add or update these when introducing providers or changing default instructions.
 Configuration contents (Ruff/Pyright/Nox) live in files; do not duplicate them here.
 
 ## 3. Workflow (tight loop)
