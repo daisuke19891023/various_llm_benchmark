@@ -1,6 +1,6 @@
 # various-llm-benchmark
 
-TyperベースのCLIで複数のLLMやエージェントフレームワークを試すためのサンドボックスです。OpenAI(Responses API)とAnthropic(Claude)に加えてGeminiのシンプルなテキスト生成と対話履歴付き応答、Agnoによるエージェント呼び出し、OpenAI Agents SDKによるエージェント呼び出し、組み込みWeb検索ツールの呼び出し(OpenAI/Claude/Gemini)をサポートしています。
+TyperベースのCLIで複数のLLMやエージェントフレームワークを試すためのサンドボックスです。OpenAI(Responses API)とAnthropic(Claude)に加えてGeminiのシンプルなテキスト生成と対話履歴付き応答、Agnoによるエージェント呼び出し、OpenAI Agents SDKによるエージェント呼び出し、Google ADKによるエージェント呼び出し、組み込みWeb検索ツールの呼び出し(OpenAI/Claude/Gemini)をサポートしています。
 
 ## セットアップ
 1. 依存関係をインストールします。
@@ -62,9 +62,18 @@ uv run various-llm-benchmark agent-sdk chat "次に何をすべき？" \
   --history "user:準備済みのリソースは？"
 ```
 
-- モデルデフォルト: OpenAIは`gpt-5.1` (軽量: `gpt-5.1-mini`)、Claudeは`claude-4.5-sonnet` (軽量: `claude-4.5-haiku`)、Geminiは`gemini-3.0-pro` (軽量: `gemini-2.5-flash`)。
+### Agent (Google ADK)
+```bash
+uv run various-llm-benchmark google-adk complete "サマリーを生成して"
+uv run various-llm-benchmark google-adk chat "次の対応を考えて" \
+  --history "system:簡潔に提案してください" \
+  --history "user:過去の決定事項を思い出して"
+uv run various-llm-benchmark google-adk web-search "最新のGemini情報を調べて" --model gemini-3.0-pro
+```
+
+- モデルデフォルト: OpenAIは`gpt-5.1` (軽量: `gpt-5.1-mini`)、Claudeは`claude-4.5-sonnet` (軽量: `claude-4.5-haiku`)、Gemini/Google ADKは`gemini-3.0-pro` (軽量: `gemini-2.5-flash`)。
 - `--light-model`オプションで軽量モデルを選択できます（環境変数`OPENAI_LIGHT_MODEL` / `ANTHROPIC_LIGHT_MODEL` / `GEMINI_LIGHT_MODEL`も利用可能）。
-- Web検索ツールは`tools`サブコマンドに加えて`agent` / `agent-sdk`からも呼び出せます。
+- Web検索ツールは`tools`サブコマンドに加えて`agent` / `agent-sdk` / `google-adk`からも呼び出せます。
 
 ### ツール呼び出し (Web Search)
 OpenAI/Claude/Geminiの組み込みWeb検索ツールを使った呼び出しを行えます。
