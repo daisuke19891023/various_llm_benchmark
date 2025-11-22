@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from various_llm_benchmark.llm.providers.anthropic.client import extract_anthropic_text
+from various_llm_benchmark.llm.providers.gemini.client import extract_gemini_text
 from various_llm_benchmark.llm.providers.openai.client import extract_openai_content
 from various_llm_benchmark.models import LLMResponse
 
@@ -59,6 +60,20 @@ class SupportsMessages(Protocol):
     """Protocol for Anthropic clients exposing the messages API."""
 
     messages: MessagesClient
+
+
+class GeminiModelsClient(Protocol):
+    """Minimal interface for Gemini model operations."""
+
+    def generate_content(self, **kwargs: object) -> object:
+        """Call a Gemini model."""
+        ...
+
+
+class SupportsSearchModels(Protocol):
+    """Protocol for Gemini clients exposing model calls."""
+
+    models: GeminiModelsClient
 
 
 class OpenAIWebSearchTool:
@@ -130,3 +145,43 @@ class AnthropicWebSearchTool:
         response = self._client.messages.create(**request_kwargs)
         content = extract_anthropic_text(response.content)
         return LLMResponse(content=content, model=response.model, raw=response.model_dump())
+
+
+class GeminiWebSearchTool:
+    """Call Gemini's web search tool via the Generative Models API."""
+
+    def __init__(
+        self,
+        client: SupportsSearchModels,
+        default_model: str,
+        *,
+        temperature: float = 0.7,
+        system_prompt: str | None = None,
+    ) -> None:
+        """Configure the Gemini tool caller."""
+        self._client = client
+        self._default_model = default_model
+        self._temperature = temperature
+        self._system_prompt = system_prompt
+
+    def search(self, prompt: str, *, model: str | None = None) -> LLMResponse:
+        """Execute a Gemini search request."""
+        contents = cast("list[dict[str, object]]", [{"role": "user", "parts": [prompt]}])
+        request_kwargs: dict[str, object] = {
+            "model": model or self._default_model,
+            "contents": contents,
+            "config": {"temperature": self._temperature},
+            "tools": [{"google_search_retrieval": {}}],
+            "tool_config": {
+                "google_search_retrieval": {"dynamic_retrieval_config": {"mode": "DYNAMIC"}},
+            },
+        }
+        if self._system_prompt is not None:
+            request_kwargs["system_instruction"] = self._system_prompt
+
+        models_client = cast("Any", self._client.models)
+        response = models_client.generate_content(**request_kwargs)
+        content = extract_gemini_text(response)
+        response_model = getattr(response, "model", None) or request_kwargs["model"]
+        raw_output = getattr(response, "model_dump", lambda: {"data": response})()
+        return LLMResponse(content=content, model=cast("str", response_model), raw=raw_output)

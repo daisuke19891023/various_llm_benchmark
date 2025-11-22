@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from agno.models.anthropic import Claude
+from agno.models.google import Gemini
 from agno.models.message import Message
 from agno.models.openai import OpenAIChat
 from agno.run.agent import RunOutput
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
 class DummyAgent:
     """Simple stub that records inputs passed to the agent."""
 
-    def __init__(self, model: OpenAIChat | Claude) -> None:
+    def __init__(self, model: OpenAIChat | Claude | Gemini) -> None:
         """Store the model and prepare to capture inputs."""
         self.model = model
         self.inputs: list[Any] = []
@@ -34,13 +35,15 @@ class DummyAgent:
         return output
 
 
-def build_provider(factory: Callable[[OpenAIChat | Claude], DummyAgent]) -> AgnoAgentProvider:
+def build_provider(factory: Callable[[OpenAIChat | Claude | Gemini], DummyAgent]) -> AgnoAgentProvider:
     """Construct provider with injected factory for determinism."""
     return AgnoAgentProvider(
         openai_api_key="openai-key",
         anthropic_api_key="anthropic-key",
+        gemini_api_key="gemini-key",
         openai_model="gpt-test",
         anthropic_model="claude-test",
+        gemini_model="gemini-test",
         temperature=0.5,
         agent_factory=factory,
     )
@@ -50,7 +53,7 @@ def test_complete_uses_openai_model_by_default() -> None:
     """Ensure OpenAI defaults and inputs are wired to the agent."""
     created: list[DummyAgent] = []
 
-    def factory(model: OpenAIChat | Claude) -> DummyAgent:
+    def factory(model: OpenAIChat | Claude | Gemini) -> DummyAgent:
         agent = DummyAgent(model)
         created.append(agent)
         return agent
@@ -70,7 +73,7 @@ def test_chat_appends_prompt_and_uses_history() -> None:
     """Convert chat history into agno messages and forward them."""
     created: list[DummyAgent] = []
 
-    def factory(model: OpenAIChat | Claude) -> DummyAgent:
+    def factory(model: OpenAIChat | Claude | Gemini) -> DummyAgent:
         agent = DummyAgent(model)
         created.append(agent)
         return agent
@@ -97,6 +100,24 @@ def test_chat_appends_prompt_and_uses_history() -> None:
     ]
 
 
+def test_gemini_provider_builds_google_model() -> None:
+    """Gemini provider selection should build Google Gemini model."""
+    created: list[DummyAgent] = []
+
+    def factory(model: OpenAIChat | Claude | Gemini) -> DummyAgent:
+        agent = DummyAgent(model)
+        created.append(agent)
+        return agent
+
+    provider = build_provider(factory)
+
+    response = provider.complete("hello", provider="gemini", model="gemini-2.0")
+
+    assert response.model == "gemini-2.0"
+    assert isinstance(created[0].model, Gemini)
+    assert created[0].model.temperature == 0.5
+
+
 def test_default_agent_factory_applies_instructions(monkeypatch: pytest.MonkeyPatch) -> None:
     """Default agent factory should pass instructions to the Agno Agent."""
     created_agents: list[StubAgent] = []
@@ -108,7 +129,9 @@ def test_default_agent_factory_applies_instructions(monkeypatch: pytest.MonkeyPa
             self.model = model_id
 
     class StubAgent:
-        def __init__(self, model: OpenAIChat | Claude, instructions: str | None = None) -> None:
+        def __init__(
+            self, model: OpenAIChat | Claude | Gemini, instructions: str | None = None,
+        ) -> None:
             self.model = model
             self.instructions = instructions
             self.inputs: list[object] = []
@@ -123,8 +146,10 @@ def test_default_agent_factory_applies_instructions(monkeypatch: pytest.MonkeyPa
     provider = AgnoAgentProvider(
         openai_api_key="openai-key",
         anthropic_api_key="anthropic-key",
+        gemini_api_key="gemini-key",
         openai_model="gpt-test",
         anthropic_model="claude-test",
+        gemini_model="gemini-test",
         temperature=0.5,
         instructions="follow steps",
     )

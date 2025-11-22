@@ -6,7 +6,7 @@ import typer
 
 from various_llm_benchmark.interfaces.commands.web_search_clients import resolve_web_search_client
 
-ProviderName = Literal["openai", "anthropic"]
+ProviderName = Literal["openai", "anthropic", "gemini"]
 
 
 tools_app = typer.Typer(help="LLMの組み込みツール呼び出しを実行します。")
@@ -16,13 +16,13 @@ PROVIDER_OPTION: ProviderName = typer.Option(
     "--provider",
     "-p",
     case_sensitive=False,
-    help="利用するプロバイダー (openai または anthropic)",
+    help="利用するプロバイダー (openai / anthropic / gemini)",
 )
 
 MODEL_OPTION: str | None = typer.Option(default=None, help="モデル名を上書きします。")
 LIGHT_MODEL_OPTION: bool = typer.Option(
     default=False,
-    help="軽量モデル (gpt-5.1-mini / claude-4.5-haiku) を使用します。",
+    help="軽量モデル (gpt-5.1-mini / claude-4.5-haiku / gemini-2.5-flash) を使用します。",
 )
 
 

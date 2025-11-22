@@ -31,20 +31,50 @@ class GeminiLLMClient(LLMClient):
         model_name = _extract_model(response, model or self._default_model)
         return LLMResponse(content=content, model=model_name, raw=_dump_raw(response))
 
-    def chat(self, messages: list[ChatMessage], *, model: str | None = None) -> LLMResponse:
+    def chat(
+        self, messages: list[ChatMessage], *, model: str | None = None, system_instruction: str | None = None,
+    ) -> LLMResponse:
         """Generate a completion using chat messages."""
+        system_prompt, chat_messages = _extract_system_instruction(messages, system_instruction)
         gemini_messages: list[dict[str, object]] = [
-            {"role": message.role, "parts": [message.content]} for message in messages
+            _to_gemini_message(message) for message in chat_messages
         ]
         models_client = cast("Any", self._client.models)
-        response: Any = models_client.generate_content(
-            model=model or self._default_model,
-            contents=gemini_messages,
-            config={"temperature": self._temperature},
-        )
+        request_kwargs: dict[str, object] = {
+            "model": model or self._default_model,
+            "contents": gemini_messages,
+            "config": {"temperature": self._temperature},
+        }
+        if system_prompt:
+            request_kwargs["system_instruction"] = system_prompt
+
+        response: Any = models_client.generate_content(**request_kwargs)
         content = _extract_text(response)
         model_name = _extract_model(response, model or self._default_model)
         return LLMResponse(content=content, model=model_name, raw=_dump_raw(response))
+
+
+def _to_gemini_message(message: ChatMessage) -> dict[str, object]:
+    role = "model" if message.role == "assistant" else message.role
+    return {"role": role, "parts": [message.content]}
+
+
+def _extract_system_instruction(
+    messages: list[ChatMessage], override: str | None,
+) -> tuple[str | None, list[ChatMessage]]:
+    system_messages = [msg for msg in messages if msg.role == "system"]
+    non_system = [msg for msg in messages if msg.role != "system"]
+    if not override and not system_messages:
+        return None, non_system
+
+    parts: list[str] = []
+    if override:
+        parts.append(override)
+    if system_messages:
+        parts.extend(msg.content for msg in system_messages)
+
+    combined = "\n".join(parts)
+    return combined, non_system
 
 
 def _extract_model(response: Any, fallback: str) -> str:

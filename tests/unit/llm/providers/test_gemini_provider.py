@@ -44,13 +44,21 @@ def test_chat_sends_history(mocker: MockerFixture) -> None:
     mock_client.models = mock_models
 
     client = GeminiLLMClient(mock_client, "gemini-3.0-pro")
-    history = [ChatMessage(role="system", content="guide"), ChatMessage(role="user", content="hello")]
-    response = client.chat(history, model="gemini-2.5-flash")
+    history = [
+        ChatMessage(role="system", content="guide"),
+        ChatMessage(role="assistant", content="ok"),
+        ChatMessage(role="user", content="hello"),
+    ]
+    response = client.chat(history, model="gemini-2.5-flash", system_instruction="override")
 
     mock_models.generate_content.assert_called_once_with(
         model="gemini-2.5-flash",
-        contents=[{"role": "system", "parts": ["guide"]}, {"role": "user", "parts": ["hello"]}],
+        contents=[
+            {"role": "model", "parts": ["ok"]},
+            {"role": "user", "parts": ["hello"]},
+        ],
         config={"temperature": 0.7},
+        system_instruction="override\nguide",
     )
     assert response.content == "answer"
     assert response.model == "gemini-light"

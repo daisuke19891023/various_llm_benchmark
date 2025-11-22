@@ -121,9 +121,13 @@ def test_claude_chat(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_gemini_chat(monkeypatch: pytest.MonkeyPatch) -> None:
     """Gemini chat command should include provider system prompt."""
     recorded_messages: list[list[ChatMessage]] = []
+    recorded_system: list[str | None] = []
 
-    def chat(messages: list[ChatMessage], model: str | None = None) -> LLMResponse:
+    def chat(
+        messages: list[ChatMessage], *, model: str | None = None, system_instruction: str | None = None,
+    ) -> LLMResponse:
         recorded_messages.append(messages)
+        recorded_system.append(system_instruction)
         return LLMResponse(content=str(len(messages)), model=model or "g", raw={"source": "test"})
 
     def fake_client() -> SimpleNamespace:
@@ -134,6 +138,8 @@ def test_gemini_chat(monkeypatch: pytest.MonkeyPatch) -> None:
     result = runner.invoke(app, ["gemini", "chat", "hi"], catch_exceptions=False)
 
     assert result.exit_code == 0
-    assert recorded_messages[0][0].role == "system"
+    assert recorded_messages[0][0].role == "user"
     assert recorded_messages[0][-1].content == "hi"
-    assert result.stdout.strip() == "2"
+    assert recorded_system[0] is not None
+    assert recorded_system[0].startswith("You are a concise and reliable assistant powered by Gemini")
+    assert result.stdout.strip() == "1"

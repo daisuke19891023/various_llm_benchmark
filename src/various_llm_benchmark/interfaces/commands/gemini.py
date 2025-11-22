@@ -43,6 +43,10 @@ def gemini_chat(
     model: str | None = typer.Option(None, help="モデル名を上書きします。"),
 ) -> None:
     """Generate a chat response with optional history."""
-    messages = build_messages(prompt, history or [], system_prompt=_prompt_template().system)
-    response = _client().chat(messages, model=model)
+    messages = build_messages(prompt, history or [])
+    response = _client().chat(
+        messages,
+        model=model,
+        system_instruction=_prompt_template().system,
+    )
     typer.echo(response.content)
