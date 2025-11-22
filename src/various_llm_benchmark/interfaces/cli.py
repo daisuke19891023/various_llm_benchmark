@@ -5,12 +5,14 @@ import typer
 from various_llm_benchmark.interfaces.commands.agent import agent_app
 from various_llm_benchmark.interfaces.commands.agent_sdk import agent_sdk_app
 from various_llm_benchmark.interfaces.commands.claude import claude_app
+from various_llm_benchmark.interfaces.commands.gemini import gemini_app
 from various_llm_benchmark.interfaces.commands.openai import openai_app
 from various_llm_benchmark.interfaces.commands.tools import tools_app
 
 app = typer.Typer(help="各種LLMやエージェントをCLIから呼び出すためのツールです。")
 app.add_typer(openai_app, name="openai")
 app.add_typer(claude_app, name="claude")
+app.add_typer(gemini_app, name="gemini")
 app.add_typer(agent_app, name="agent")
 app.add_typer(agent_sdk_app, name="agent-sdk")
 app.add_typer(tools_app, name="tools")
