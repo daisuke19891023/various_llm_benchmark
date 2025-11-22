@@ -35,6 +35,27 @@ def test_openai_complete(monkeypatch: pytest.MonkeyPatch) -> None:
     assert captured[0].rstrip().endswith("hello")
 
 
+def test_gemini_complete(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Gemini complete command should apply provider prompt."""
+    captured: list[str] = []
+
+    def generate(prompt: str, model: str | None = None) -> LLMResponse:
+        captured.append(prompt)
+        return LLMResponse(content=f"gm:{prompt}", model=model or "g", raw={"source": "test"})
+
+    def fake_client() -> SimpleNamespace:
+        return SimpleNamespace(generate=generate)
+
+    monkeypatch.setattr("various_llm_benchmark.interfaces.commands.gemini._client", fake_client)
+
+    result = runner.invoke(app, ["gemini", "complete", "hey"])
+
+    assert result.exit_code == 0
+    assert "gm:" in result.stdout
+    assert captured[0].startswith("You are a concise and reliable assistant powered by Gemini")
+    assert captured[0].rstrip().endswith("hey")
+
+
 def test_openai_chat(monkeypatch: pytest.MonkeyPatch) -> None:
     """OpenAI chat command should handle history and print response."""
 
@@ -90,6 +111,27 @@ def test_claude_chat(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("various_llm_benchmark.interfaces.commands.claude._client", fake_client)
 
     result = runner.invoke(app, ["claude", "chat", "hi"], catch_exceptions=False)
+
+    assert result.exit_code == 0
+    assert recorded_messages[0][0].role == "system"
+    assert recorded_messages[0][-1].content == "hi"
+    assert result.stdout.strip() == "2"
+
+
+def test_gemini_chat(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Gemini chat command should include provider system prompt."""
+    recorded_messages: list[list[ChatMessage]] = []
+
+    def chat(messages: list[ChatMessage], model: str | None = None) -> LLMResponse:
+        recorded_messages.append(messages)
+        return LLMResponse(content=str(len(messages)), model=model or "g", raw={"source": "test"})
+
+    def fake_client() -> SimpleNamespace:
+        return SimpleNamespace(chat=chat)
+
+    monkeypatch.setattr("various_llm_benchmark.interfaces.commands.gemini._client", fake_client)
+
+    result = runner.invoke(app, ["gemini", "chat", "hi"], catch_exceptions=False)
 
     assert result.exit_code == 0
     assert recorded_messages[0][0].role == "system"

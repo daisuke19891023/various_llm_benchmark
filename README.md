@@ -1,6 +1,6 @@
 # various-llm-benchmark
 
-TyperベースのCLIで複数のLLMやエージェントフレームワークを試すためのサンドボックスです。現状はOpenAI(Responses API)とAnthropic(Claude)のシンプルなテキスト生成と対話履歴付き応答に加え、Agnoによるエージェント呼び出しとOpenAI Agents SDKによるエージェント呼び出しをサポートしています。
+TyperベースのCLIで複数のLLMやエージェントフレームワークを試すためのサンドボックスです。OpenAI(Responses API)とAnthropic(Claude)に加えてGeminiのシンプルなテキスト生成と対話履歴付き応答、Agnoによるエージェント呼び出し、OpenAI Agents SDKによるエージェント呼び出しをサポートしています。
 
 ## セットアップ
 1. 依存関係をインストールします。
@@ -36,6 +36,14 @@ uv run various-llm-benchmark claude chat "続きを教えて" \
   --history "system:あなたは簡潔に答えます"
 ```
 
+### Gemini
+```bash
+uv run various-llm-benchmark gemini complete "こんにちは"
+uv run various-llm-benchmark gemini chat "次の質問に答えて" \
+  --history "system:最新情報を確認して" \
+  --history "user:今日の予定は？"
+```
+
 ### Agent (Agno)
 ```bash
 uv run various-llm-benchmark agent complete "ファイル構成を教えて" --provider openai
@@ -54,8 +62,8 @@ uv run various-llm-benchmark agent-sdk chat "次に何をすべき？" \
   --history "user:準備済みのリソースは？"
 ```
 
-- モデルデフォルト: OpenAIは`gpt-5.1` (軽量: `gpt-5.1-mini`)、Claudeは`claude-4.5-sonnet` (軽量: `claude-4.5-haiku`)。
-- `--light-model`オプションで軽量モデルを選択できます（環境変数`OPENAI_LIGHT_MODEL` / `ANTHROPIC_LIGHT_MODEL`も利用可能）。
+- モデルデフォルト: OpenAIは`gpt-5.1` (軽量: `gpt-5.1-mini`)、Claudeは`claude-4.5-sonnet` (軽量: `claude-4.5-haiku`)、Geminiは`gemini-3.0-pro` (軽量: `gemini-2.5-flash`)。
+- `--light-model`オプションで軽量モデルを選択できます（環境変数`OPENAI_LIGHT_MODEL` / `ANTHROPIC_LIGHT_MODEL` / `GEMINI_LIGHT_MODEL`も利用可能）。
 - Web検索ツールは`tools`サブコマンドに加えて`agent` / `agent-sdk`からも呼び出せます。
 
 ### ツール呼び出し (Web Search)
