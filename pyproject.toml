@@ -1,18 +1,21 @@
 [project]
-name = "template-project-placeholder"
+name = "various-llm-benchmark"
 version = "0.1.0"
-description = "Template project placeholder description"
+description = "CLI playground for testing multiple LLM and agent frameworks"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "python-dotenv>=1.1.1",
+    "anthropic>=0.74.1",
+    "openai>=2.8.1",
     "pydantic>=2.12.3",
     "pydantic-settings>=2.11.0",
+    "python-dotenv>=1.1.1",
+    "typer>=0.20.0",
     "ulid>=1.1",
-] # Update as needed for real project requirements
+]
 
 [project.scripts]
-template-project-placeholder = "template_package.main:main"  # Replace with actual entry point
+various-llm-benchmark = "various_llm_benchmark.interfaces.cli:main"
 
 [project.optional-dependencies]
 dev = [
@@ -132,5 +135,5 @@ addopts = "-v -ra --strict-markers"
 markers = [
   "slow: marks tests as slow (deselect with '-m \"not slow\"')",
   "integration: marks integration tests",
-  "asyncio: marks tests as asyncio"
+  "asyncio: marks tests as asyncio",
 ]
