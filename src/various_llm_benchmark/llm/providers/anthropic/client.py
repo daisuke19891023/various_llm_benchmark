@@ -70,3 +70,8 @@ def _extract_text(content: list[Any] | str) -> str:
             continue
         parts.append(str(block))
     return "".join(parts)
+
+
+def extract_anthropic_text(content: list[Any] | str) -> str:
+    """Public wrapper for parsing Anthropic message content."""
+    return _extract_text(content)

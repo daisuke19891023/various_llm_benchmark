@@ -6,6 +6,7 @@ import typer
 
 from various_llm_benchmark.agents.providers import AgnoAgentProvider, ProviderName
 from various_llm_benchmark.interfaces.commands.common import build_messages
+from various_llm_benchmark.interfaces.commands.web_search_clients import resolve_web_search_client
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
 from various_llm_benchmark.settings import settings
 
@@ -25,19 +26,29 @@ PROVIDER_OPTION = typer.Option(
     help="利用するプロバイダー (openai または anthropic)",
 )
 
+MODEL_OPTION: str | None = typer.Option(default=None, help="モデル名を上書きします。")
+LIGHT_MODEL_OPTION: bool = typer.Option(
+    default=False,
+    help="軽量モデル (gpt-5.1-mini / claude-4.5-haiku) を使用します。",
+)
+
 
 @lru_cache(maxsize=1)
 def _prompt_template() -> PromptTemplate:
     return load_provider_prompt("agents", "agno")
 
 
-def _create_provider() -> AgnoAgentProvider:
+def _create_provider(*, use_light_model: bool = False) -> AgnoAgentProvider:
     prompt_template = _prompt_template()
+    openai_model = settings.openai_light_model if use_light_model else settings.openai_model
+    anthropic_model = (
+        settings.anthropic_light_model if use_light_model else settings.anthropic_model
+    )
     return AgnoAgentProvider(
         openai_api_key=settings.openai_api_key.get_secret_value(),
         anthropic_api_key=settings.anthropic_api_key.get_secret_value(),
-        openai_model=settings.openai_model,
-        anthropic_model=settings.anthropic_model,
+        openai_model=openai_model,
+        anthropic_model=anthropic_model,
         temperature=settings.default_temperature,
         instructions=prompt_template.system,
     )
@@ -47,10 +58,12 @@ def _create_provider() -> AgnoAgentProvider:
 def agent_complete(
     prompt: str,
     provider: ProviderName = PROVIDER_OPTION,
-    model: str | None = typer.Option(None, help="モデル名を上書きします。"),
+    model: str | None = MODEL_OPTION,
+    light_model: bool = LIGHT_MODEL_OPTION,
 ) -> None:
     """Generate a single-turn response via Agno agent."""
-    response = _create_provider().complete(prompt, provider=provider, model=model)
+    provider_client = _create_provider(use_light_model=light_model)
+    response = provider_client.complete(prompt, provider=provider, model=model)
     typer.echo(response.content)
 
 
@@ -59,9 +72,24 @@ def agent_chat(
     prompt: str,
     history: list[str] | None = HISTORY_OPTION,
     provider: ProviderName = PROVIDER_OPTION,
-    model: str | None = typer.Option(None, help="モデル名を上書きします。"),
+    model: str | None = MODEL_OPTION,
+    light_model: bool = LIGHT_MODEL_OPTION,
 ) -> None:
     """Generate an Agno agent response that includes history."""
     messages = build_messages(prompt, history or [], system_prompt=_prompt_template().system)
-    response = _create_provider().chat(messages, provider=provider, model=model)
+    provider_client = _create_provider(use_light_model=light_model)
+    response = provider_client.chat(messages, provider=provider, model=model)
+    typer.echo(response.content)
+
+
+@agent_app.command("web-search")
+def agent_web_search(
+    prompt: str,
+    provider: ProviderName = PROVIDER_OPTION,
+    model: str | None = MODEL_OPTION,
+    light_model: bool = LIGHT_MODEL_OPTION,
+) -> None:
+    """組み込みWeb検索ツールをAgno経由で呼び出します."""
+    client = resolve_web_search_client(provider, use_light_model=light_model)
+    response = client.search(prompt, model=model)
     typer.echo(response.content)

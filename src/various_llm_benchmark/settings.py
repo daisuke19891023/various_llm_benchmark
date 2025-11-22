@@ -9,8 +9,12 @@ class Settings(BaseSettings):
 
     openai_api_key: SecretStr = Field(default=SecretStr(""), validation_alias="OPENAI_API_KEY")
     anthropic_api_key: SecretStr = Field(default=SecretStr(""), validation_alias="ANTHROPIC_API_KEY")
-    openai_model: str = Field(default="gpt-4o-mini", validation_alias="OPENAI_MODEL")
-    anthropic_model: str = Field(default="claude-3-5-sonnet-20241022", validation_alias="ANTHROPIC_MODEL")
+    openai_model: str = Field(default="gpt-5.1", validation_alias="OPENAI_MODEL")
+    openai_light_model: str = Field(default="gpt-5.1-mini", validation_alias="OPENAI_LIGHT_MODEL")
+    anthropic_model: str = Field(default="claude-4.5-sonnet", validation_alias="ANTHROPIC_MODEL")
+    anthropic_light_model: str = Field(
+        default="claude-4.5-haiku", validation_alias="ANTHROPIC_LIGHT_MODEL",
+    )
     default_temperature: float = Field(default=0.7, validation_alias="DEFAULT_TEMPERATURE")
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

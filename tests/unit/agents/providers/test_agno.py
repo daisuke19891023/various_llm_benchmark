@@ -99,7 +99,7 @@ def test_chat_appends_prompt_and_uses_history() -> None:
 
 def test_default_agent_factory_applies_instructions(monkeypatch: pytest.MonkeyPatch) -> None:
     """Default agent factory should pass instructions to the Agno Agent."""
-    created_agents: list["StubAgent"] = []
+    created_agents: list[StubAgent] = []
 
     class StubRunResult:
         def __init__(self, model_id: str) -> None:

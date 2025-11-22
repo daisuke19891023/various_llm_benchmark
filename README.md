@@ -54,6 +54,20 @@ uv run various-llm-benchmark agent-sdk chat "次に何をすべき？" \
   --history "user:準備済みのリソースは？"
 ```
 
+- モデルデフォルト: OpenAIは`gpt-5.1` (軽量: `gpt-5.1-mini`)、Claudeは`claude-4.5-sonnet` (軽量: `claude-4.5-haiku`)。
+- `--light-model`オプションで軽量モデルを選択できます（環境変数`OPENAI_LIGHT_MODEL` / `ANTHROPIC_LIGHT_MODEL`も利用可能）。
+- Web検索ツールは`tools`サブコマンドに加えて`agent` / `agent-sdk`からも呼び出せます。
+
+### ツール呼び出し (Web Search)
+OpenAI/Claudeの組み込みWeb検索ツールを使った呼び出しを行えます。
+
+```bash
+uv run various-llm-benchmark tools web-search "最新のAIニュースをまとめて" --provider openai
+uv run various-llm-benchmark tools web-search "ドキュメントの更新点を調べて" --provider anthropic
+uv run various-llm-benchmark agent web-search "設計指針を調査して" --provider openai --light-model
+uv run various-llm-benchmark agent-sdk web-search "最新のAPI例を調べて" --light-model
+```
+
 ## 開発
 - 設定は`pydantic-settings`経由で読み込みます。環境変数を直接参照せず`Settings`を利用してください。
 - コマンドは`src/various_llm_benchmark/interfaces/commands/`に追加します。
