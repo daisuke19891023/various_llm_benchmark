@@ -5,6 +5,7 @@ description = "CLI playground for testing multiple LLM and agent frameworks"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "agno>=2.3.2",
     "anthropic>=0.74.1",
     "openai>=2.8.1",
     "pydantic>=2.12.3",
