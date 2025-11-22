@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from typer.testing import CliRunner
 
 from various_llm_benchmark.interfaces import cli
 from various_llm_benchmark.interfaces.commands import agent as agent_cmd
+from various_llm_benchmark.llm.tools.registry import ToolCategory
 from various_llm_benchmark.models import ChatMessage, LLMResponse
 
 if TYPE_CHECKING:
@@ -109,8 +109,14 @@ def test_agent_web_search_uses_resolver(monkeypatch: pytest.MonkeyPatch) -> None
     """Web検索コマンドが指定オプションをResolverに渡すことを確認する."""
     captured: dict[str, Any] = {}
 
-    def fake_resolver(provider: str, *, use_light_model: bool = False) -> SimpleNamespace:
+    def fake_resolver(
+        provider: str,
+        *,
+        category: ToolCategory = ToolCategory.BUILTIN,
+        use_light_model: bool = False,
+    ) -> object:
         captured["provider"] = provider
+        captured["category"] = category
         captured["use_light_model"] = use_light_model
 
         def search(prompt: str, model: str | None = None) -> LLMResponse:
@@ -118,7 +124,7 @@ def test_agent_web_search_uses_resolver(monkeypatch: pytest.MonkeyPatch) -> None
             captured["model"] = model
             return LLMResponse(content="web-result", model=model or "default", raw={})
 
-        return SimpleNamespace(search=search)
+        return search
 
     monkeypatch.setattr(agent_cmd, "resolve_web_search_client", fake_resolver)
 
@@ -142,5 +148,6 @@ def test_agent_web_search_uses_resolver(monkeypatch: pytest.MonkeyPatch) -> None
         "use_light_model": True,
         "prompt": "news",
         "model": "claude-4.5-sonnet",
+        "category": ToolCategory.BUILTIN,
     }
     assert "web-result" in result.stdout

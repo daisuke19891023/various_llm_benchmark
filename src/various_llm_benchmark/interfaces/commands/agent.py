@@ -9,6 +9,7 @@ from various_llm_benchmark.agents.providers import AgnoAgentProvider, ProviderNa
 from various_llm_benchmark.interfaces.commands.common import build_messages
 from various_llm_benchmark.media.images import read_image_file
 from various_llm_benchmark.interfaces.commands.web_search_clients import resolve_web_search_client
+from various_llm_benchmark.llm.tools.registry import ToolCategory
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
 from various_llm_benchmark.settings import settings
 
@@ -40,6 +41,11 @@ MODEL_OPTION: str | None = typer.Option(default=None, help="モデル名を上�
 LIGHT_MODEL_OPTION: bool = typer.Option(
     default=False,
     help="軽量モデル (gpt-5.1-mini / claude-4.5-haiku / gemini-2.5-flash) を使用します。",
+)
+CATEGORY_OPTION: ToolCategory = typer.Option(
+    default=ToolCategory.BUILTIN,
+    case_sensitive=False,
+    help="利用するツールカテゴリ (builtin / mcp / external)",
 )
 
 
@@ -101,10 +107,13 @@ def agent_web_search(
     provider: ProviderName = PROVIDER_OPTION,
     model: str | None = MODEL_OPTION,
     light_model: bool = LIGHT_MODEL_OPTION,
+    category: ToolCategory = CATEGORY_OPTION,
 ) -> None:
     """組み込みWeb検索ツールをAgno経由で呼び出します."""
-    client = resolve_web_search_client(provider, use_light_model=light_model)
-    response = client.search(prompt, model=model)
+    search = resolve_web_search_client(
+        provider, category=category, use_light_model=light_model,
+    )
+    response = search(prompt, model=model)
     typer.echo(response.content)
 
 

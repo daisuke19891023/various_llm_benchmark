@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from functools import lru_cache
-from typing import Literal, cast
+from functools import lru_cache, partial
+from typing import TYPE_CHECKING, Literal, Protocol, cast
 
 from anthropic import Anthropic
 from google import genai
@@ -17,10 +17,54 @@ from various_llm_benchmark.llm.tools.web_search import (
     SupportsResponses,
     SupportsSearchModels,
 )
+from various_llm_benchmark.llm.tools.registry import (
+    ToolCategory,
+    ToolRegistration,
+    get_tool,
+    register_tool,
+)
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
 from various_llm_benchmark.settings import settings
 
+if TYPE_CHECKING:
+    from various_llm_benchmark.models import LLMResponse
+
 ProviderName = Literal["openai", "anthropic", "gemini"]
+
+
+class WebSearchHandler(Protocol):
+    """Callable that executes a web search-enabled LLM request."""
+
+    def __call__(
+        self,
+        prompt: str,
+        *,
+        model: str | None = None,
+        use_light_model: bool = False,
+    ) -> LLMResponse:
+        """Execute a search request."""
+        ...
+
+
+class WebSearchExecutor(Protocol):
+    """Callable that runs a web search for a prompt."""
+
+    def __call__(self, prompt: str, *, model: str | None = None) -> LLMResponse:
+        """Execute a search request."""
+        ...
+
+WEB_SEARCH_INPUT_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "properties": {
+        "prompt": {"type": "string", "description": "ユーザーからの検索依頼"},
+        "model": {"type": "string", "description": "明示的に利用するモデル"},
+        "use_light_model": {
+            "type": "boolean",
+            "description": "軽量モデルを利用する場合にtrue",
+        },
+    },
+    "required": ["prompt"],
+}
 
 
 @lru_cache(maxsize=1)
@@ -77,12 +121,85 @@ def build_gemini_web_search_tool(use_light_model: bool = False) -> GeminiWebSear
     )
 
 
+def _tool_id(provider: ProviderName) -> str:
+    return f"web-search/{provider}"
+
+
+def _register_web_search_tool(
+    provider: ProviderName,
+    description: str,
+    handler: WebSearchHandler,
+) -> None:
+    register_tool(
+        ToolRegistration(
+            id=_tool_id(provider),
+            description=description,
+            input_schema=WEB_SEARCH_INPUT_SCHEMA,
+            handler=handler,
+            category=ToolCategory.BUILTIN,
+        ),
+    )
+
+
+def _openai_web_search(
+    prompt: str, *, model: str | None = None, use_light_model: bool = False,
+) -> LLMResponse:
+    tool = build_openai_web_search_tool(use_light_model=use_light_model)
+    return tool.search(prompt, model=model)
+
+
+def _anthropic_web_search(
+    prompt: str, *, model: str | None = None, use_light_model: bool = False,
+) -> LLMResponse:
+    tool = build_anthropic_web_search_tool(use_light_model=use_light_model)
+    return tool.search(prompt, model=model)
+
+
+def _gemini_web_search(
+    prompt: str, *, model: str | None = None, use_light_model: bool = False,
+) -> LLMResponse:
+    tool = build_gemini_web_search_tool(use_light_model=use_light_model)
+    return tool.search(prompt, model=model)
+
+
+def _ensure_web_search_tools_registered() -> None:
+    """Register built-in web search tool adapters."""
+    for provider, description, handler in (
+        (
+            "openai",
+            "OpenAI Responses API を使ったビルトインWeb検索ツール",
+            _openai_web_search,
+        ),
+        (
+            "anthropic",
+            "Anthropic Messages API を使ったビルトインWeb検索ツール",
+            _anthropic_web_search,
+        ),
+        (
+            "gemini",
+            "Gemini Search API を使ったビルトインWeb検索ツール",
+            _gemini_web_search,
+        ),
+    ):
+        try:
+            _register_web_search_tool(
+                cast("ProviderName", provider),
+                description,
+                handler,
+            )
+        except ValueError:
+            # Tools are registered at import time; ignore duplicate registrations.
+            continue
+
+
 def resolve_web_search_client(
-    provider: ProviderName, *, use_light_model: bool = False,
-) -> AnthropicWebSearchTool | OpenAIWebSearchTool | GeminiWebSearchTool:
-    """Construct a search-enabled client for the given provider."""
-    if provider == "anthropic":
-        return build_anthropic_web_search_tool(use_light_model=use_light_model)
-    if provider == "gemini":
-        return build_gemini_web_search_tool(use_light_model=use_light_model)
-    return build_openai_web_search_tool(use_light_model=use_light_model)
+    provider: ProviderName,
+    *,
+    category: ToolCategory = ToolCategory.BUILTIN,
+    use_light_model: bool = False,
+) -> WebSearchExecutor:
+    """Construct a callable search executor from the registry."""
+    _ensure_web_search_tools_registered()
+    registration = get_tool(_tool_id(provider), category=category)
+    handler = cast("WebSearchHandler", registration.handler)
+    return cast("WebSearchExecutor", partial(handler, use_light_model=use_light_model))
