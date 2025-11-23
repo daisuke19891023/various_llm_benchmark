@@ -79,7 +79,7 @@ call_tool("memory/append", role="user", content="not allowed")
 def test_payload_overrides_are_used_for_providers() -> None:
     """Registered tool should surface provider-specific payload overrides."""
     selector = ToolSelector()
-    code_tool = selector.select_one(tags=["execution"], category=None)
+    code_tool = selector.select_one(ids=["code/execute"], category=None)
 
     assert set(ALLOWED_LANGUAGES) == {"python"}
 
