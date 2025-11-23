@@ -32,10 +32,18 @@ def _client() -> DsPyLLMClient:
     )
 
 
+def _selected_model(model: str | None) -> str | None:
+    if isinstance(model, typer.models.OptionInfo):
+        return None
+    return model
+
+
 @dspy_app.command("complete")
 def dspy_complete(prompt: str, model: str | None = typer.Option(None, help="モデル名を上書きします。")) -> None:
     """Generate a single-turn response with DsPy."""
-    response = _client().generate(_prompt_template().to_prompt_text(prompt), model=model)
+    response = _client().generate(
+        _prompt_template().to_prompt_text(prompt), model=_selected_model(model),
+    )
     typer.echo(response.content)
 
 
@@ -47,5 +55,5 @@ def dspy_chat(
 ) -> None:
     """Generate a chat response with optional history."""
     messages = build_messages(prompt, history or [], system_prompt=_prompt_template().system)
-    response = _client().chat(messages, model=model)
+    response = _client().chat(messages, model=_selected_model(model))
     typer.echo(response.content)
