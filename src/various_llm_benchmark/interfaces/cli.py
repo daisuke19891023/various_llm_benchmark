@@ -5,6 +5,7 @@ import typer
 from various_llm_benchmark.interfaces.commands.agent import agent_app
 from various_llm_benchmark.interfaces.commands.agent_sdk import agent_sdk_app
 from various_llm_benchmark.interfaces.commands.claude import claude_app
+from various_llm_benchmark.interfaces.commands.compare import compare_app
 from various_llm_benchmark.interfaces.commands.google_adk import adk_app
 from various_llm_benchmark.interfaces.commands.gemini import gemini_app
 from various_llm_benchmark.interfaces.commands.openai import openai_app
@@ -17,6 +18,7 @@ app.add_typer(gemini_app, name="gemini")
 app.add_typer(adk_app, name="google-adk")
 app.add_typer(agent_app, name="agent")
 app.add_typer(agent_sdk_app, name="agent-sdk")
+app.add_typer(compare_app, name="compare")
 app.add_typer(tools_app, name="tools")
 
 
