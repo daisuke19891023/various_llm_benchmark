@@ -56,6 +56,27 @@ def test_gemini_complete(monkeypatch: pytest.MonkeyPatch) -> None:
     assert captured[0].rstrip().endswith("hey")
 
 
+def test_dspy_complete(monkeypatch: pytest.MonkeyPatch) -> None:
+    """DsPy complete command should include provider prompt."""
+    captured: list[str] = []
+
+    def generate(prompt: str, model: str | None = None) -> LLMResponse:
+        captured.append(prompt)
+        return LLMResponse(content=f"ds:{prompt}", model=model or "d", raw={"source": "test"})
+
+    def fake_client() -> SimpleNamespace:
+        return SimpleNamespace(generate=generate)
+
+    monkeypatch.setattr("various_llm_benchmark.interfaces.commands.dspy._client", fake_client)
+
+    result = runner.invoke(app, ["dspy", "complete", "hello"])
+
+    assert result.exit_code == 0
+    assert "ds:" in result.stdout
+    assert captured[0].startswith("You are a succinct assistant powered by DsPy")
+    assert captured[0].rstrip().endswith("hello")
+
+
 def test_openai_chat(monkeypatch: pytest.MonkeyPatch) -> None:
     """OpenAI chat command should handle history and print response."""
 
@@ -143,3 +164,24 @@ def test_gemini_chat(monkeypatch: pytest.MonkeyPatch) -> None:
     assert recorded_system[0] is not None
     assert recorded_system[0].startswith("You are a concise and reliable assistant powered by Gemini")
     assert result.stdout.strip() == "1"
+
+
+def test_dspy_chat(monkeypatch: pytest.MonkeyPatch) -> None:
+    """DsPy chat command should include system prompt when building messages."""
+    recorded_messages: list[list[ChatMessage]] = []
+
+    def chat(messages: list[ChatMessage], model: str | None = None) -> LLMResponse:
+        recorded_messages.append(messages)
+        return LLMResponse(content=str(len(messages)), model=model or "d", raw={"source": "test"})
+
+    def fake_client() -> SimpleNamespace:
+        return SimpleNamespace(chat=chat)
+
+    monkeypatch.setattr("various_llm_benchmark.interfaces.commands.dspy._client", fake_client)
+
+    result = runner.invoke(app, ["dspy", "chat", "hi"], catch_exceptions=False)
+
+    assert result.exit_code == 0
+    assert recorded_messages[0][0].role == "system"
+    assert recorded_messages[0][-1].content == "hi"
+    assert result.stdout.strip() == "2"
