@@ -8,6 +8,13 @@ TyperベースのCLIで複数のLLMやエージェントフレームワークを
    uv sync --extra dev
    ```
 2. `.env.example`を参考に`.env`を作成し、各APIキーを設定します。
+3. PostgreSQLによるベクトル/全文検索を利用する場合は、以下も設定します。
+   - `POSTGRES_CONNECTION_STRING`: 接続文字列 (例: `postgresql://user:password@localhost:5432/dbname`)
+   - `POSTGRES_SCHEMA`: 利用するスキーマ名
+   - `PGVECTOR_TABLE_NAME` / `PGROONGA_TABLE_NAME`: 各拡張で利用するテーブル名
+   - `ENABLE_PGVECTOR` / `ENABLE_PGROONGA`: 拡張を有効化するフラグ
+   - `SEARCH_TOP_K` / `SEARCH_SCORE_THRESHOLD`: 検索での上位件数とスコア閾値
+   - `EMBEDDING_MODEL`: 埋め込みモデル名
 
 ## プロンプト管理
 - システムプロンプトは`src/various_llm_benchmark/prompts/`以下のYAMLで管理します。
