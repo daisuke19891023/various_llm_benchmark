@@ -44,6 +44,14 @@ uv run various-llm-benchmark gemini chat "次の質問に答えて" \
   --history "user:今日の予定は？"
 ```
 
+### DsPy
+```bash
+uv run various-llm-benchmark dspy complete "簡潔に要約してください"
+uv run various-llm-benchmark dspy chat "次の方針を考えて" --light-model \
+  --history "system:箇条書きで提案してください" \
+  --history "user:進捗を整理したい"
+```
+
 ### Agent (Agno)
 ```bash
 uv run various-llm-benchmark agent complete "ファイル構成を教えて" --provider openai
@@ -72,7 +80,8 @@ uv run various-llm-benchmark google-adk web-search "最新のGemini情報を調�
 ```
 
 - モデルデフォルト: OpenAIは`gpt-5.1` (軽量: `gpt-5.1-mini`)、Claudeは`claude-4.5-sonnet` (軽量: `claude-4.5-haiku`)、Gemini/Google ADKは`gemini-3.0-pro` (軽量: `gemini-2.5-flash`)。
-- `--light-model`オプションで軽量モデルを選択できます（環境変数`OPENAI_LIGHT_MODEL` / `ANTHROPIC_LIGHT_MODEL` / `GEMINI_LIGHT_MODEL`も利用可能）。
+- DsPyはOpenAIモデルを利用し、デフォルト`gpt-5.1` (軽量: `gpt-5.1-mini`)を使用します。
+- `--light-model`オプションで軽量モデルを選択できます（環境変数`OPENAI_LIGHT_MODEL` / `ANTHROPIC_LIGHT_MODEL` / `GEMINI_LIGHT_MODEL` / `DSPY_LIGHT_MODEL`も利用可能）。
 - Web検索ツールは`tools`サブコマンドに加えて`agent` / `agent-sdk` / `google-adk`からも呼び出せます。
 
 ### ツール呼び出し (Web Search)
