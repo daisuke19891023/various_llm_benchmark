@@ -117,21 +117,44 @@ def _normalize_outputs(response: ModelResponse, model_type: str) -> NormalizedOu
     return _normalize_completion_outputs(response)
 
 
+def _extract_choice_text(choice: object) -> str | None:
+    message = getattr(choice, "message", None)
+    if message is not None:
+        content = getattr(message, "content", None)
+        if isinstance(content, str):
+            return content
+    text_attr = getattr(choice, "text", None)
+    if isinstance(text_attr, str):
+        return text_attr
+    if isinstance(choice, Mapping):
+        mapping_choice = cast("Mapping[str, object]", choice)
+        text_candidate = mapping_choice.get("text")
+        if isinstance(text_candidate, str):
+            return text_candidate
+    return None
+
+
+def _extract_choice_tool_calls(choice: object) -> object | None:
+    message = getattr(choice, "message", None)
+    if message is not None:
+        tool_calls = getattr(message, "tool_calls", None)
+        if tool_calls is not None:
+            return tool_calls
+    tool_calls_attr = getattr(choice, "tool_calls", None)
+    if tool_calls_attr is not None:
+        return tool_calls_attr
+    if isinstance(choice, Mapping):
+        mapping_choice = cast("Mapping[str, object]", choice)
+        return mapping_choice.get("tool_calls")
+    return None
+
+
 def _normalize_completion_outputs(response: ModelResponse) -> NormalizedOutputs:
     outputs: NormalizedOutputs = []
     choices = cast("list[Any]", getattr(response, "choices", []))
     for choice in choices:
-        message = getattr(choice, "message", None)
-        text: str | None = None
-        tool_calls: object | None = None
-        if message is not None:
-            text = getattr(message, "content", None)
-            tool_calls = getattr(message, "tool_calls", None)
-        elif isinstance(choice, Mapping):
-            mapping_choice = cast("Mapping[str, object]", choice)
-            text_candidate = mapping_choice.get("text")
-            text = text_candidate if isinstance(text_candidate, str) else None
-            tool_calls = mapping_choice.get("tool_calls")
+        text = _extract_choice_text(choice)
+        tool_calls = _extract_choice_tool_calls(choice)
         output: dict[str, object] = {}
         if isinstance(text, str):
             output["text"] = text
