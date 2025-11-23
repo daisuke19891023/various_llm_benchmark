@@ -88,9 +88,11 @@ def test_openai_complete_with_reasoning_and_verbosity(monkeypatch: pytest.Monkey
 def test_gemini_complete(monkeypatch: pytest.MonkeyPatch) -> None:
     """Gemini complete command should apply provider prompt."""
     captured: list[str] = []
+    recorded_thinking: list[str | None] = []
 
-    def generate(prompt: str, model: str | None = None) -> LLMResponse:
+    def generate(prompt: str, model: str | None = None, thinking_level: str | None = None) -> LLMResponse:
         captured.append(prompt)
+        recorded_thinking.append(thinking_level)
         return LLMResponse(content=f"gm:{prompt}", model=model or "g", raw={"source": "test"})
 
     def fake_client() -> SimpleNamespace:
@@ -104,6 +106,27 @@ def test_gemini_complete(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "gm:" in result.stdout
     assert captured[0].startswith("You are a concise and reliable assistant powered by Gemini")
     assert captured[0].rstrip().endswith("hey")
+    assert recorded_thinking[0] is None
+
+
+def test_gemini_complete_accepts_thinking_level(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Gemini complete should forward thinking level option."""
+    recorded: dict[str, object] = {}
+
+    def generate(prompt: str, model: str | None = None, thinking_level: str | None = None) -> LLMResponse:
+        recorded.update({"prompt": prompt, "model": model, "thinking_level": thinking_level})
+        return LLMResponse(content=f"gm:{prompt}", model=model or "g", raw={"source": "test"})
+
+    def fake_client() -> SimpleNamespace:
+        return SimpleNamespace(generate=generate)
+
+    monkeypatch.setattr("various_llm_benchmark.interfaces.commands.gemini._client", fake_client)
+
+    result = runner.invoke(app, ["gemini", "complete", "hey", "--thinking-level", "high"])
+
+    assert result.exit_code == 0
+    assert recorded["thinking_level"] == "high"
+    assert recorded["prompt"] is not None
 
 
 def test_dspy_complete(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -243,12 +266,18 @@ def test_gemini_chat(monkeypatch: pytest.MonkeyPatch) -> None:
     """Gemini chat command should include provider system prompt."""
     recorded_messages: list[list[ChatMessage]] = []
     recorded_system: list[str | None] = []
+    recorded_thinking: list[str | None] = []
 
     def chat(
-        messages: list[ChatMessage], *, model: str | None = None, system_instruction: str | None = None,
+        messages: list[ChatMessage],
+        *,
+        model: str | None = None,
+        system_instruction: str | None = None,
+        thinking_level: str | None = None,
     ) -> LLMResponse:
         recorded_messages.append(messages)
         recorded_system.append(system_instruction)
+        recorded_thinking.append(thinking_level)
         return LLMResponse(content=str(len(messages)), model=model or "g", raw={"source": "test"})
 
     def fake_client() -> SimpleNamespace:
@@ -264,6 +293,49 @@ def test_gemini_chat(monkeypatch: pytest.MonkeyPatch) -> None:
     assert recorded_system[0] is not None
     assert recorded_system[0].startswith("You are a concise and reliable assistant powered by Gemini")
     assert result.stdout.strip() == "1"
+    assert recorded_thinking[0] is None
+
+
+def test_gemini_chat_accepts_thinking_level(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Gemini chat should pass thinking level when requested."""
+    recorded: dict[str, object] = {}
+
+    def chat(
+        messages: list[ChatMessage],
+        *,
+        model: str | None = None,
+        system_instruction: str | None = None,
+        thinking_level: str | None = None,
+    ) -> LLMResponse:
+        recorded.update({
+            "messages": messages,
+            "system_instruction": system_instruction,
+            "thinking_level": thinking_level,
+        })
+        return LLMResponse(content=str(len(messages)), model=model or "g", raw={"source": "test"})
+
+    def fake_client() -> SimpleNamespace:
+        return SimpleNamespace(chat=chat)
+
+    monkeypatch.setattr("various_llm_benchmark.interfaces.commands.gemini._client", fake_client)
+
+    result = runner.invoke(
+        app,
+        [
+            "gemini",
+            "chat",
+            "hi",
+            "--history",
+            "user:prev",
+            "--thinking-level",
+            "high",
+        ],
+        catch_exceptions=False,
+    )
+
+    assert result.exit_code == 0
+    assert recorded["thinking_level"] == "high"
+    assert isinstance(recorded.get("messages"), list)
 
 
 def test_dspy_chat(monkeypatch: pytest.MonkeyPatch) -> None:
