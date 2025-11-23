@@ -22,6 +22,15 @@ class Settings(BaseSettings):
     gemini_thinking_level: str | None = Field(
         default=None, validation_alias="GEMINI_THINKING_LEVEL",
     )
+    pydantic_ai_api_key: SecretStr = Field(
+        default=SecretStr(""), validation_alias="PYDANTIC_AI_API_KEY",
+    )
+    pydantic_ai_model: str = Field(
+        default="gpt-5.1", validation_alias="PYDANTIC_AI_MODEL",
+    )
+    pydantic_ai_light_model: str = Field(
+        default="gpt-5.1-mini", validation_alias="PYDANTIC_AI_LIGHT_MODEL",
+    )
     openai_embedding_model: str = Field(
         default="text-embedding-3-large", validation_alias="OPENAI_EMBEDDING_MODEL",
     )

@@ -21,11 +21,13 @@ def test_create_provider_uses_settings(monkeypatch: Any) -> None:
             created.update(model=model, system_prompt=system_prompt, temperature=temperature)
 
     monkeypatch.setattr(pydantic_ai, "PydanticAIAgentProvider", DummyProvider)
-    monkeypatch.setattr(pydantic_ai.settings, "openai_model", "primary-model")
-    monkeypatch.setattr(pydantic_ai.settings, "openai_light_model", "light-model")
+    monkeypatch.setattr(pydantic_ai.settings, "pydantic_ai_model", "primary-model")
+    monkeypatch.setattr(pydantic_ai.settings, "pydantic_ai_light_model", "light-model")
     monkeypatch.setattr(pydantic_ai.settings, "default_temperature", 0.35)
+    monkeypatch.setattr(pydantic_ai.settings, "pydantic_ai_api_key", SecretStr("pydantic-key"))
     monkeypatch.setattr(pydantic_ai.settings, "openai_api_key", SecretStr("factory-key"))
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("PYDANTIC_AI_API_KEY", raising=False)
 
     provider = pydantic_ai.create_provider()
 
@@ -33,6 +35,7 @@ def test_create_provider_uses_settings(monkeypatch: Any) -> None:
     assert created["model"] == "primary-model"
     assert created["system_prompt"]
     assert created["temperature"] == 0.35
+    assert os.environ["PYDANTIC_AI_API_KEY"] == "pydantic-key"
     assert os.environ["OPENAI_API_KEY"] == "factory-key"
 
     light_provider = pydantic_ai.create_provider(use_light_model=True)

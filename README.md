@@ -16,6 +16,7 @@ TyperベースのCLIで複数のLLMやエージェントフレームワークを
    - `SEARCH_TOP_K` / `SEARCH_SCORE_THRESHOLD`: 検索での上位件数とスコア閾値 (デフォルト: それぞれ`5`/`0.0`)
    - 埋め込みモデル: `OPENAI_EMBEDDING_MODEL` / `OPENAI_EMBEDDING_MODEL_LIGHT` / `GOOGLE_EMBEDDING_MODEL` /
      `VOYAGE_EMBEDDING_MODEL` (後方互換として`EMBEDDING_MODEL`も指定可能)
+   - Pydantic AIを利用する場合は`PYDANTIC_AI_API_KEY`や`PYDANTIC_AI_MODEL` / `PYDANTIC_AI_LIGHT_MODEL`を必要に応じて上書きしてください。
    - Dockerでpgvector + PGroongaを起動する場合は`docker-compose.yml`を利用できます (`docker compose up -d db`)
 
 ## プロンプト管理
@@ -92,9 +93,20 @@ uv run various-llm-benchmark google-adk chat "次の対応を考えて" \
 uv run various-llm-benchmark google-adk web-search "最新のGemini情報を調べて" --model gemini-3.0-pro
 ```
 
-- モデルデフォルト: OpenAIは`gpt-5.1` (軽量: `gpt-5.1-mini`)、Claudeは`claude-4.5-sonnet` (軽量: `claude-4.5-haiku`)、Gemini/Google ADKは`gemini-3.0-pro` (軽量: `gemini-2.5-flash`)。
+- Pydantic AI
+```bash
+uv run various-llm-benchmark pydantic-ai complete "段階的に答えて"
+uv run various-llm-benchmark pydantic-ai chat "要件を整理して" \
+  --history "system:箇条書きでタスクを出力してください" \
+  --history "user:直近のTODOをまとめて" \
+  --light-model \
+  --temperature 0.3
+uv run various-llm-benchmark pydantic-ai vision "この画像の内容を要約して" --image-path ./path/to/image.png
+```
+
+- モデルデフォルト: OpenAIは`gpt-5.1` (軽量: `gpt-5.1-mini`)、Claudeは`claude-4.5-sonnet` (軽量: `claude-4.5-haiku`)、Gemini/Google ADKは`gemini-3.0-pro` (軽量: `gemini-2.5-flash`)、Pydantic AIは`gpt-5.1` (軽量: `gpt-5.1-mini`)。
 - DsPyはOpenAIモデルを利用し、デフォルト`gpt-5.1` (軽量: `gpt-5.1-mini`)を使用します。
-- `--light-model`オプションで軽量モデルを選択できます（環境変数`OPENAI_LIGHT_MODEL` / `ANTHROPIC_LIGHT_MODEL` / `GEMINI_LIGHT_MODEL` / `DSPY_LIGHT_MODEL`も利用可能）。
+- `--light-model`オプションで軽量モデルを選択できます（環境変数`OPENAI_LIGHT_MODEL` / `ANTHROPIC_LIGHT_MODEL` / `GEMINI_LIGHT_MODEL` / `DSPY_LIGHT_MODEL` / `PYDANTIC_AI_LIGHT_MODEL`も利用可能）。
 - Gemini 3.0 では reasoning 出力の深さを決める thinking level を指定できます。環境変数`GEMINI_THINKING_LEVEL`または`gemini`コマンドの`--thinking-level`オプションで設定してください。
 - Web検索ツールは`tools`サブコマンドに加えて`agent` / `agent-sdk` / `google-adk`からも呼び出せます。
 
