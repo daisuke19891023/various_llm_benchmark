@@ -28,6 +28,7 @@ def _client() -> DsPyLLMClient:
     return DsPyLLMClient(
         settings.openai_model,
         temperature=settings.default_temperature,
+        api_key=settings.openai_api_key.get_secret_value(),
     )
 
 

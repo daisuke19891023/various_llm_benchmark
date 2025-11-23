@@ -7,6 +7,7 @@ from typer.testing import CliRunner
 
 from various_llm_benchmark.interfaces.cli import app
 from various_llm_benchmark.models import ChatMessage, LLMResponse
+from various_llm_benchmark.settings import settings
 
 if TYPE_CHECKING:
     import pytest
@@ -75,6 +76,41 @@ def test_dspy_complete(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "ds:" in result.stdout
     assert captured[0].startswith("You are a succinct assistant powered by DsPy")
     assert captured[0].rstrip().endswith("hello")
+
+
+def test_dspy_client_passes_api_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """DsPy client factory should forward the configured API key."""
+    captured: dict[str, object] = {}
+
+    class RecordingClient(SimpleNamespace):
+        def __init__(
+            self, default_model: str, *, temperature: float, **kwargs: object,
+        ) -> None:
+            super().__init__()
+            captured["model"] = default_model
+            captured["temperature"] = temperature
+            captured["kwargs"] = kwargs
+
+            self.model = default_model
+
+        def generate(self, prompt: str, model: str | None = None) -> LLMResponse:
+            return LLMResponse(
+                content=f"ok:{prompt}", model=model or self.model, raw={"source": "test"},
+            )
+
+    monkeypatch.setattr(
+        "various_llm_benchmark.interfaces.commands.dspy.DsPyLLMClient",
+        RecordingClient,
+    )
+
+    from various_llm_benchmark.interfaces.commands.dspy import dspy_complete
+
+    dspy_complete("hello")
+
+    assert captured["model"] == settings.openai_model
+    assert captured["temperature"] == settings.default_temperature
+    expected_key = settings.openai_api_key.get_secret_value()
+    assert captured["kwargs"] == {"api_key": expected_key}
 
 
 def test_openai_chat(monkeypatch: pytest.MonkeyPatch) -> None:
