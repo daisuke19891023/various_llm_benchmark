@@ -22,6 +22,7 @@ class NativeToolType(StrEnum):
 
     WEB_SEARCH = "web_search"
     RETRIEVER = "retriever"
+    CODE_EXECUTION = "code_execution"
 
 
 class ToolRegistration(BaseModel):
@@ -35,12 +36,13 @@ class ToolRegistration(BaseModel):
     input_schema: dict[str, Any]
     tags: set[str] = Field(default_factory=set)
     native_type: NativeToolType | None = None
-    provider_overrides: dict[str, dict[str, object]] = Field(default_factory=dict)
+    provider_overrides: dict[str, object] = Field(default_factory=dict)
     handler: typing.Callable[..., Any]
     category: ToolCategory
 
 
 WEB_SEARCH_TAG = "web_search"
+CODE_EXECUTION_TAG = "code_execution"
 RETRIEVER_TAG = "retriever"
 RETRIEVER_TOOL_NAMESPACE = "retriever"
 RETRIEVER_INPUT_SCHEMA: dict[str, object] = {

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, cast
+
+from google.genai import types as genai_types
 
 from various_llm_benchmark.llm.tools.registry import (
+    CODE_EXECUTION_TAG,
     NativeToolType,
     ToolRegistration,
     WEB_SEARCH_TAG,
@@ -16,6 +19,10 @@ if TYPE_CHECKING:
 
 def _is_web_search(tool: ToolRegistration) -> bool:
     return tool.native_type is NativeToolType.WEB_SEARCH or WEB_SEARCH_TAG in tool.tags
+
+
+def _is_code_execution(tool: ToolRegistration) -> bool:
+    return tool.native_type is NativeToolType.CODE_EXECUTION or CODE_EXECUTION_TAG in tool.tags
 
 
 def _function_payload(tool: ToolRegistration) -> dict[str, object]:
@@ -31,11 +38,14 @@ def to_openai_tools_payload(tools: Sequence[ToolRegistration]) -> list[dict[str,
     payload: list[dict[str, object]] = []
     for tool in tools:
         override = tool.provider_overrides.get("openai")
-        if override:
-            payload.append(override)
+        if isinstance(override, dict):
+            payload.append(cast("dict[str, object]", override))
             continue
         if _is_web_search(tool):
             payload.append({"type": "web_search"})
+            continue
+        if _is_code_execution(tool):
+            payload.append({"type": "code_interpreter"})
             continue
         payload.append(
             {
@@ -51,11 +61,14 @@ def to_anthropic_tools_payload(tools: Sequence[ToolRegistration]) -> list[dict[s
     payload: list[dict[str, object]] = []
     for tool in tools:
         override = tool.provider_overrides.get("anthropic")
-        if override:
-            payload.append(override)
+        if isinstance(override, dict):
+            payload.append(cast("dict[str, object]", override))
             continue
         if _is_web_search(tool):
             payload.append({"type": "web_search"})
+            continue
+        if _is_code_execution(tool):
+            payload.append({"type": "code_execution_20250825", "name": "code_execution"})
             continue
         payload.append(
             {
@@ -67,24 +80,37 @@ def to_anthropic_tools_payload(tools: Sequence[ToolRegistration]) -> list[dict[s
     return payload
 
 
-def to_gemini_tools_payload(tools: Sequence[ToolRegistration]) -> list[dict[str, object]]:
+def to_gemini_tools_payload(tools: Sequence[ToolRegistration]) -> list[genai_types.Tool]:
     """Convert tool registrations to Gemini `tools` payload."""
-    payload: list[dict[str, object]] = []
+    payload: list[genai_types.Tool] = []
     for tool in tools:
         override = tool.provider_overrides.get("gemini")
-        if override:
+        if isinstance(override, genai_types.Tool):
             payload.append(override)
             continue
-        if _is_web_search(tool):
-            payload.append({"google_search_retrieval": {}})
+        if isinstance(override, dict):
+            payload.append(genai_types.Tool.model_validate(override))
             continue
-        payload.append(
-            {
-                "function_declarations": [
-                    _function_payload(tool),
-                ],
-            },
+        if _is_web_search(tool):
+            payload.append(
+                genai_types.Tool(
+                    google_search_retrieval=genai_types.GoogleSearchRetrieval(),
+                ),
+            )
+            continue
+        if _is_code_execution(tool):
+            payload.append(
+                genai_types.Tool(
+                    code_execution=genai_types.ToolCodeExecution(),
+                ),
+            )
+            continue
+        function_declaration = genai_types.FunctionDeclaration(
+            name=tool.name,
+            description=tool.description,
+            parameters_json_schema=tool.input_schema,
         )
+        payload.append(genai_types.Tool(function_declarations=[function_declaration]))
     return payload
 
 
@@ -98,7 +124,7 @@ def to_agents_sdk_tools_payload(tools: Sequence[ToolRegistration]) -> list[dict[
     return to_openai_tools_payload(tools)
 
 
-def to_google_adk_tools_payload(tools: Sequence[ToolRegistration]) -> list[dict[str, Any]]:
+def to_google_adk_tools_payload(tools: Sequence[ToolRegistration]) -> list[genai_types.Tool]:
     """Return tool payloads suitable for Google ADK agents."""
     return to_gemini_tools_payload(tools)
 
