@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Self, cast
 
 import pytest
 from openai import APITimeoutError
+from pydantic import SecretStr
 from psycopg_pool import PoolTimeout
 
 from various_llm_benchmark.llm.tools.retriever import (
@@ -207,6 +208,18 @@ def test_generate_embedding_uses_voyage_provider() -> None:
 
     assert vector == [0.7, 0.8]
     assert client.called_with == (["hello"], settings.voyage_embedding_model)
+
+
+def test_generate_embedding_requires_voyage_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Voyageプロバイダー利用時にAPIキーが必須であること."""
+    monkeypatch.setattr(settings, "voyage_api_key", SecretStr(""))
+
+    with pytest.raises(RetrieverError, match="Voyage API key"):
+        generate_embedding(
+            "hello",
+            provider=EmbeddingProvider.VOYAGE,
+            timeout=0.0,
+        )
 
 
 def test_pgvector_similarity_search_filters_by_threshold() -> None:

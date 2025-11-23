@@ -8,6 +8,7 @@ from enum import StrEnum
 import math
 import time
 from typing import TYPE_CHECKING, Any, Protocol, Self, cast
+from collections.abc import Callable
 
 from google.genai import Client
 from google.genai.types import HttpOptions
@@ -168,39 +169,23 @@ def generate_embedding(
     voyage_client: SupportsVoyageClient | None = None,
 ) -> list[float]:
     """Generate an embedding vector using the requested provider with retries."""
-    if provider is EmbeddingProvider.OPENAI:
-        provider_handler = partial(
-            _generate_openai_embedding,
-            text,
-            model=model,
-            timeout=timeout,
-            client=openai_client,
-        )
-    elif provider is EmbeddingProvider.GOOGLE:
-        provider_handler = partial(
-            _generate_google_embedding,
-            text,
-            model=model,
-            timeout=timeout,
-            client=google_client,
-        )
-    elif provider is EmbeddingProvider.VOYAGE:
-        provider_handler = partial(
-            _generate_voyage_embedding,
-            text,
-            model=model,
-            timeout=timeout,
-            client=voyage_client,
-        )
-    else:
-        msg = f"Unsupported embedding provider: {provider}"
-        raise RetrieverError(msg)
+    provider_handler = _build_provider_handler(
+        provider,
+        text,
+        model=model,
+        timeout=timeout,
+        openai_client=openai_client,
+        google_client=google_client,
+        voyage_client=voyage_client,
+    )
 
     backoff: float = 0.2
     errors: list[Exception] = []
     for attempt in range(max_retries + 1):
         try:
             return provider_handler()
+        except RetrieverError:
+            raise
         except (APITimeoutError, APIConnectionError, RateLimitError) as exc:
             errors.append(exc)
             if attempt >= max_retries:
@@ -222,6 +207,45 @@ def generate_embedding(
         raise RetrieverError(msg) from last_error
 
     msg = "Embedding generation failed without raising errors."
+    raise RetrieverError(msg)
+
+
+def _build_provider_handler(
+    provider: EmbeddingProvider,
+    text: str,
+    *,
+    model: str | None,
+    timeout: float,
+    openai_client: SupportsOpenAIClient | None,
+    google_client: SupportsGoogleClient | None,
+    voyage_client: SupportsVoyageClient | None,
+) -> Callable[[], list[float]]:
+    if provider is EmbeddingProvider.OPENAI:
+        return partial(
+            _generate_openai_embedding,
+            text,
+            model=model,
+            timeout=timeout,
+            client=openai_client,
+        )
+    if provider is EmbeddingProvider.GOOGLE:
+        return partial(
+            _generate_google_embedding,
+            text,
+            model=model,
+            timeout=timeout,
+            client=google_client,
+        )
+    if provider is EmbeddingProvider.VOYAGE:
+        return partial(
+            _generate_voyage_embedding,
+            text,
+            model=model,
+            timeout=timeout,
+            client=voyage_client,
+        )
+
+    msg = f"Unsupported embedding provider: {provider}"
     raise RetrieverError(msg)
 
 
@@ -406,7 +430,13 @@ def _generate_voyage_embedding(
     text: str, *, model: str | None, timeout: float, client: SupportsVoyageClient | None,
 ) -> list[float]:
     embedding_model = model or settings.embedding_model or settings.voyage_embedding_model
-    voyage_client = client or VoyageClient(api_key=settings.voyage_api_key.get_secret_value(), timeout=timeout)
+    voyage_client = client
+    if voyage_client is None:
+        api_key = settings.voyage_api_key.get_secret_value()
+        if not api_key:
+            msg = "Voyage API key is required to generate embeddings with the Voyage provider."
+            raise RetrieverError(msg)
+        voyage_client = VoyageClient(api_key=api_key, timeout=timeout)
     response = voyage_client.embed(
         texts=[text],
         model=embedding_model,

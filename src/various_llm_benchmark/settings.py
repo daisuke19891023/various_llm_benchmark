@@ -65,15 +65,6 @@ class Settings(BaseSettings):
         ]
 
         if self.enable_pgvector or self.enable_pgroonga:
-            if self.enable_pgvector:
-                missing_keys.extend(
-                    key
-                    for key, value in (
-                        ("VOYAGE_API_KEY", self.voyage_api_key.get_secret_value()),
-                    )
-                    if not value
-                )
-
             missing_keys.extend(
                 key
                 for key, value in (
