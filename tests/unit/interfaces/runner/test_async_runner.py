@@ -73,3 +73,21 @@ async def test_runner_cancels_remaining_tasks() -> None:
 
     assert any(result.cancelled for result in results)
     assert any(result.succeeded for result in results)
+
+
+@pytest.mark.asyncio
+async def test_runner_drains_queue_after_task_cancellation() -> None:
+    """Cancelled tasks should not leave queued work hanging."""
+
+    async def cancelled_task() -> str:
+        await asyncio.sleep(0.01)
+        raise asyncio.CancelledError
+
+    runner = AsyncJobRunner[str](concurrency=1)
+    runner.add_task(cancelled_task, name="cancelled")
+    runner.add_task(lambda: "second", name="second")
+
+    results = await asyncio.wait_for(runner.run(), timeout=1)
+
+    assert len(results) == 2
+    assert all(result.cancelled for result in results)
