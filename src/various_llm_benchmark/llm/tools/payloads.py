@@ -18,6 +18,14 @@ def _is_web_search(tool: ToolRegistration) -> bool:
     return tool.native_type is NativeToolType.WEB_SEARCH or WEB_SEARCH_TAG in tool.tags
 
 
+def _function_payload(tool: ToolRegistration) -> dict[str, object]:
+    return {
+        "name": tool.name,
+        "description": tool.description,
+        "parameters": tool.input_schema,
+    }
+
+
 def to_openai_tools_payload(tools: Sequence[ToolRegistration]) -> list[dict[str, object]]:
     """Convert tool registrations to OpenAI Responses `tools` payload."""
     payload: list[dict[str, object]] = []
@@ -32,11 +40,7 @@ def to_openai_tools_payload(tools: Sequence[ToolRegistration]) -> list[dict[str,
         payload.append(
             {
                 "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": tool.input_schema,
-                },
+                "function": _function_payload(tool),
             },
         )
     return payload
@@ -77,11 +81,7 @@ def to_gemini_tools_payload(tools: Sequence[ToolRegistration]) -> list[dict[str,
         payload.append(
             {
                 "function_declarations": [
-                    {
-                        "name": tool.name,
-                        "description": tool.description,
-                        "parameters": tool.input_schema,
-                    },
+                    _function_payload(tool),
                 ],
             },
         )

@@ -78,3 +78,73 @@ def test_tools_web_search_anthropic(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result.exit_code == 0
     assert captured == [("docs", None)]
     assert "claude-result" in result.stdout
+
+
+def test_tools_retriever(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Retrieverサブコマンドがresolver経由で呼び出されることを確認する."""
+    captured: list[dict[str, object]] = []
+
+    def fake_resolver(
+        provider: str,
+        *,
+        category: ToolCategory = ToolCategory.BUILTIN,
+    ) -> object:
+        assert provider == "gemini"
+        assert category is ToolCategory.BUILTIN
+
+        def retrieve(
+            query: str,
+            *,
+            model: str | None = None,
+            top_k: int | None = None,
+            threshold: float | None = None,
+            timeout: float = 5.0,
+        ) -> dict[str, object]:
+            captured.append(
+                {
+                    "query": query,
+                    "model": model,
+                    "top_k": top_k,
+                    "threshold": threshold,
+                    "timeout": timeout,
+                },
+            )
+            return {"documents": []}
+
+        return retrieve
+
+    monkeypatch.setattr(
+        "various_llm_benchmark.interfaces.commands.tools.resolve_retriever_client",
+        fake_resolver,
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "tools",
+            "retriever",
+            "query text",
+            "--provider",
+            "gemini",
+            "--model",
+            "embed-v1",
+            "--top-k",
+            "7",
+            "--threshold",
+            "0.3",
+            "--timeout",
+            "1.5",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured == [
+        {
+            "query": "query text",
+            "model": "embed-v1",
+            "top_k": 7,
+            "threshold": 0.3,
+            "timeout": 1.5,
+        },
+    ]
+    assert "documents" in result.stdout
