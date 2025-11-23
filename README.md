@@ -34,7 +34,11 @@ uv run various-llm-benchmark openai complete "こんにちは"
 uv run various-llm-benchmark openai chat "次の質問に答えて" \
   --history "system:あなたは親切なアシスタントです" \
   --history "user:昨日の天気は？"
+uv run various-llm-benchmark openai complete "じっくり考えて" \
+  --reasoning-effort high --verbosity high
 ```
+
+- `--reasoning-effort`と`--verbosity`オプションを指定すると、OpenAI Responses APIの推論強度(`none`/`low`/`medium`/`high`)と詳細度(`low`/`medium`/`high`)を切り替えられます。
 
 ### Claude
 ```bash

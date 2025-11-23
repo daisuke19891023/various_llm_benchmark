@@ -17,9 +17,18 @@ runner = CliRunner()
 def test_openai_complete(monkeypatch: pytest.MonkeyPatch) -> None:
     """OpenAI complete command should print generated content."""
     captured: list[str] = []
+    captured_reasoning: list[str | None] = []
+    captured_verbosity: list[str | None] = []
 
-    def generate(prompt: str, model: str | None = None) -> LLMResponse:
+    def generate(
+        prompt: str,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+        verbosity: str | None = None,
+    ) -> LLMResponse:
         captured.append(prompt)
+        captured_reasoning.append(reasoning_effort)
+        captured_verbosity.append(verbosity)
         return LLMResponse(content=f"echo:{prompt}", model=model or "m", raw={"source": "test"})
 
     def fake_client() -> SimpleNamespace:
@@ -33,6 +42,47 @@ def test_openai_complete(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "echo:" in result.stdout
     assert captured[0].startswith("You are a helpful assistant.")
     assert captured[0].rstrip().endswith("hello")
+    assert captured_reasoning[0] is None
+    assert captured_verbosity[0] is None
+
+
+def test_openai_complete_with_reasoning_and_verbosity(monkeypatch: pytest.MonkeyPatch) -> None:
+    """OpenAI complete command should forward reasoning options."""
+    recorded: dict[str, str | None] = {}
+
+    def generate(
+        prompt: str,
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+        verbosity: str | None = None,
+    ) -> LLMResponse:
+        recorded["prompt"] = prompt
+        recorded["reasoning_effort"] = reasoning_effort
+        recorded["verbosity"] = verbosity
+        return LLMResponse(content="ok", model=model or "m", raw={"source": "test"})
+
+    def fake_client() -> SimpleNamespace:
+        return SimpleNamespace(generate=generate)
+
+    monkeypatch.setattr("various_llm_benchmark.interfaces.commands.openai._client", fake_client)
+
+    result = runner.invoke(
+        app,
+        [
+            "openai",
+            "complete",
+            "hello",
+            "--reasoning-effort",
+            "high",
+            "--verbosity",
+            "high",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert recorded["reasoning_effort"] == "high"
+    assert recorded["verbosity"] == "high"
+    assert recorded["prompt"] is not None
 
 
 def test_gemini_complete(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -79,8 +129,17 @@ def test_dspy_complete(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_openai_chat(monkeypatch: pytest.MonkeyPatch) -> None:
     """OpenAI chat command should handle history and print response."""
+    recorded_reasoning: list[str | None] = []
+    recorded_verbosity: list[str | None] = []
 
-    def chat(messages: list[ChatMessage], model: str | None = None) -> LLMResponse:
+    def chat(
+        messages: list[ChatMessage],
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+        verbosity: str | None = None,
+    ) -> LLMResponse:
+        recorded_reasoning.append(reasoning_effort)
+        recorded_verbosity.append(verbosity)
         return LLMResponse(content=str(len(messages)), model=model or "m", raw={"source": "test"})
 
     def fake_client() -> SimpleNamespace:
@@ -95,6 +154,47 @@ def test_openai_chat(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result.exit_code == 0
     assert "4" in result.stdout  # system prompt + 2 history + 1 user prompt
+    assert recorded_reasoning[0] is None
+    assert recorded_verbosity[0] is None
+
+
+def test_openai_chat_with_reasoning_and_verbosity(monkeypatch: pytest.MonkeyPatch) -> None:
+    """OpenAI chat command should pass reasoning settings to the client."""
+    recorded: dict[str, str | None] = {}
+
+    def chat(
+        messages: list[ChatMessage],
+        model: str | None = None,
+        reasoning_effort: str | None = None,
+        verbosity: str | None = None,
+    ) -> LLMResponse:
+        recorded["reasoning_effort"] = reasoning_effort
+        recorded["verbosity"] = verbosity
+        recorded["count"] = str(len(messages))
+        return LLMResponse(content="ok", model=model or "m", raw={"source": "test"})
+
+    def fake_client() -> SimpleNamespace:
+        return SimpleNamespace(chat=chat)
+
+    monkeypatch.setattr("various_llm_benchmark.interfaces.commands.openai._client", fake_client)
+
+    result = runner.invoke(
+        app,
+        [
+            "openai",
+            "chat",
+            "hi",
+            "--reasoning-effort",
+            "medium",
+            "--verbosity",
+            "low",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert recorded["reasoning_effort"] == "medium"
+    assert recorded["verbosity"] == "low"
+    assert recorded["count"] == "2"
 
 
 def test_claude_complete(monkeypatch: pytest.MonkeyPatch) -> None:
