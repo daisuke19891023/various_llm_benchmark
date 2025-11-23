@@ -18,6 +18,7 @@ from various_llm_benchmark.llm.tools.retriever import (
     SupportsEmbeddingCreate,
     SupportsGoogleModels,
     generate_embedding,
+    generate_embeddings_batch,
     merge_ranked_results,
     pgroonga_full_text_search,
     pgvector_similarity_search,
@@ -110,7 +111,7 @@ class FlakyEmbeddings:
 class FakeOpenAIClient:
     """OpenAI client stub exposing an embeddings attribute."""
 
-    def __init__(self, embeddings: FlakyEmbeddings) -> None:
+    def __init__(self, embeddings: SupportsEmbeddingCreate) -> None:
         """Store the embeddings stub."""
         self.embeddings: SupportsEmbeddingCreate = embeddings
 
@@ -123,11 +124,13 @@ class FakeGenAIModels:
         self.payload = payload
         self.last_model: str | None = None
         self.last_contents: list[str] | None = None
+        self.calls: list[list[str]] = []
 
     def embed_content(self, *, model: str, contents: list[str]) -> object:
         """Record arguments and return preset payload."""
         self.last_model = model
         self.last_contents = contents
+        self.calls.append(contents)
         return self.payload
 
 
@@ -151,6 +154,22 @@ class FakeVoyageClient:
         """Record arguments and return preset payload."""
         self.called_with = (texts, model)
         return self.payload
+
+
+class BatchEmbeddings:
+    """Embeddings stub that supports batching."""
+
+    def __init__(self) -> None:
+        """Initialize storage for received payloads."""
+        self.last_kwargs: dict[str, object] | None = None
+
+    def create(self, **kwargs: object) -> SimpleNamespace:
+        """Record the request and return one embedding per input."""
+        self.last_kwargs = dict(kwargs)
+        inputs = cast("list[str]", kwargs.get("input", []))
+        return SimpleNamespace(
+            data=[SimpleNamespace(embedding=[float(len(item))]) for item in inputs],
+        )
 
 
 def test_generate_embedding_retries_on_transient_error(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -207,6 +226,56 @@ def test_generate_embedding_uses_voyage_provider() -> None:
 
     assert vector == [0.7, 0.8]
     assert client.called_with == (["hello"], settings.voyage_embedding_model)
+
+
+def test_generate_embeddings_batch_openai() -> None:
+    """OpenAI batch embeddings should reuse the client and return vectors."""
+    embeddings = BatchEmbeddings()
+    client = FakeOpenAIClient(embeddings)
+
+    vectors = generate_embeddings_batch(
+        ["hi", "hello"],
+        provider=EmbeddingProvider.OPENAI,
+        timeout=0.0,
+        openai_client=client,
+    )
+
+    assert vectors == [[2.0], [5.0]]
+    assert embeddings.last_kwargs is not None
+    assert embeddings.last_kwargs["input"] == ["hi", "hello"]
+
+
+def test_generate_embeddings_batch_google_falls_back_per_item() -> None:
+    """Google provider should reuse the client per item when batching."""
+    payload = SimpleNamespace(embedding=SimpleNamespace(values=[1.0, 2.0]))
+    client = FakeGenAIClient(payload)
+
+    vectors = generate_embeddings_batch(
+        ["a", "b", "c"],
+        provider=EmbeddingProvider.GOOGLE,
+        timeout=0.0,
+        google_client=client,
+    )
+
+    assert vectors == [[1.0, 2.0]] * 3
+    models = cast("FakeGenAIModels", client.models)
+    assert len(models.calls) == 3
+
+
+def test_generate_embeddings_batch_voyage() -> None:
+    """Voyage provider should embed a batch of texts at once."""
+    payload = SimpleNamespace(embeddings=[[0.1, 0.2], [0.3, 0.4]])
+    client = FakeVoyageClient(payload)
+
+    vectors = generate_embeddings_batch(
+        ["a", "bb"],
+        provider=EmbeddingProvider.VOYAGE,
+        timeout=0.0,
+        voyage_client=client,
+    )
+
+    assert vectors == [[0.1, 0.2], [0.3, 0.4]]
+    assert client.called_with == (["a", "bb"], settings.voyage_embedding_model)
 
 
 def test_pgvector_similarity_search_filters_by_threshold() -> None:

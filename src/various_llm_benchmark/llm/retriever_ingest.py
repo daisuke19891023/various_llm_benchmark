@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import time
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Sequence
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, Self
+from typing import TYPE_CHECKING, Any, Protocol, Self, cast
+import importlib
 
 from pydantic import BaseModel, Field
 
@@ -18,12 +20,12 @@ from various_llm_benchmark.llm.tools.retriever import (
     SupportsGoogleClient,
     SupportsOpenAIClient,
     SupportsVoyageClient,
-    generate_embedding,
+    generate_embeddings_batch,
 )
 from various_llm_benchmark.settings import settings
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
 
 _UPSERT_ERROR_MESSAGE = "Failed to upsert embeddings into pgvector."
@@ -181,15 +183,25 @@ class ParagraphChunker(BaseChunker):
         return chunks
 
 
-def build_chunker(strategy: ChunkerStrategy, **kwargs: Any) -> BaseChunker:
+def build_chunker(
+    strategy: ChunkerStrategy | str,
+    *,
+    registry: Mapping[str, type[BaseChunker]] | None = None,
+    **kwargs: Any,
+) -> BaseChunker:
     """Instantiate a chunker based on the chosen strategy."""
-    if strategy is ChunkerStrategy.SLIDING_WINDOW:
-        return SlidingWindowChunker(**kwargs)
-    if strategy is ChunkerStrategy.PARAGRAPH:
-        return ParagraphChunker(**kwargs)
-
-    msg = f"Unsupported chunker strategy: {strategy}"
-    raise IngestError(msg)
+    normalized_registry: dict[str, type[BaseChunker]] = {
+        ChunkerStrategy.SLIDING_WINDOW.value: SlidingWindowChunker,
+        ChunkerStrategy.PARAGRAPH.value: ParagraphChunker,
+        **dict(registry or {}),
+    }
+    key = strategy.value if isinstance(strategy, ChunkerStrategy) else str(strategy)
+    try:
+        chunker_cls = normalized_registry[key]
+    except KeyError as exc:
+        msg = f"Unsupported chunker strategy: {strategy}"
+        raise IngestError(msg) from exc
+    return chunker_cls(**kwargs)
 
 
 def load_text_documents(directory: Path) -> list[TextDocument]:
@@ -221,6 +233,26 @@ def _table_identifier(schema: str, table: str) -> sql.Identifier:
     return sql.Identifier(schema, table)
 
 
+def _try_import_execute_values() -> Callable[
+    [SupportsCursor, object, Sequence[tuple[object, ...]], str | None],
+    object,
+] | None:
+    try:
+        module = importlib.import_module("psycopg.extras")
+    except ModuleNotFoundError:
+        return None
+    execute_values_fn = getattr(module, "execute_values", None)
+    if execute_values_fn is None:
+        return None
+    return cast(
+        "Callable[[SupportsCursor, object, Sequence[tuple[object, ...]], str | None], object]",
+        execute_values_fn,
+    )
+
+
+execute_values = _try_import_execute_values()
+
+
 def _upsert_embeddings(
     pool: ConnectionPoolProtocol,
     rows: Sequence[tuple[DocumentChunk, Sequence[float]]],
@@ -235,26 +267,49 @@ def _upsert_embeddings(
         return
 
     table_reference = _table_identifier(schema, table)
-    query = sql.SQL(
-        "INSERT INTO {table} (id, content, metadata, embedding) "
-        "VALUES (%s, %s, %s::jsonb, %s::vector) "
+    batched_query = sql.SQL(
+        "INSERT INTO {table} (id, content, metadata, embedding) VALUES %s "
         "ON CONFLICT (id) DO UPDATE SET "
         "content = EXCLUDED.content, "
         "metadata = EXCLUDED.metadata, "
         "embedding = EXCLUDED.embedding",
     ).format(table=table_reference)
+    values_template = "(%s, %s, %s::jsonb, %s::vector)"
+
+    values = [
+        (chunk.id, chunk.content, json.dumps(chunk.metadata), list(embedding))
+        for chunk, embedding in rows
+    ]
 
     backoff = sleep_base
     last_error: Exception | None = None
+    execute_values_fn = execute_values or _try_import_execute_values()
     for attempt in range(max_retries + 1):
         connection: SupportsTransactionalConnection | None = None
         try:
             with pool.connection(timeout=timeout) as connection:
                 with connection.cursor() as cursor:
-                    for chunk, embedding in rows:
-                        cursor.execute(
-                            query,
-                            [chunk.id, chunk.content, json.dumps(chunk.metadata), list(embedding)],
+                    if execute_values_fn is None:
+                        placeholders = sql.SQL(", ").join(
+                            sql.SQL(values_template) for _ in values
+                        )
+                        combined_query = sql.SQL(
+                            "INSERT INTO {table} (id, content, metadata, embedding) VALUES {values} "
+                            "ON CONFLICT (id) DO UPDATE SET "
+                            "content = EXCLUDED.content, "
+                            "metadata = EXCLUDED.metadata, "
+                            "embedding = EXCLUDED.embedding",
+                        ).format(table=table_reference, values=placeholders)
+                        parameters: list[object] = []
+                        for value in values:
+                            parameters.extend(value)
+                        cursor.execute(combined_query, parameters)
+                    else:
+                        execute_values_fn(
+                            cursor,
+                            batched_query,
+                            values,
+                            values_template,
                         )
                 connection.commit()
         except PsycopgError as exc:
@@ -276,7 +331,8 @@ def ingest_text_directory(
     *,
     pool: ConnectionPoolProtocol,
     chunker: BaseChunker | None = None,
-    chunker_strategy: ChunkerStrategy = ChunkerStrategy.SLIDING_WINDOW,
+    chunk_strategy: ChunkerStrategy | str = ChunkerStrategy.SLIDING_WINDOW,
+    chunker_registry: Mapping[str, type[BaseChunker]] | None = None,
     chunker_options: dict[str, Any] | None = None,
     embedding_provider: EmbeddingProvider = EmbeddingProvider.OPENAI,
     embedding_model: str | None = None,
@@ -298,7 +354,9 @@ def ingest_text_directory(
         raise IngestError(_MISSING_SCHEMA_MESSAGE)
 
     chunker_instance = chunker or build_chunker(
-        chunker_strategy, **(chunker_options or {}),
+        chunk_strategy,
+        registry=chunker_registry,
+        **(chunker_options or {}),
     )
     documents = load_text_documents(directory)
     chunks = chunk_documents(documents, chunker_instance)
@@ -306,21 +364,20 @@ def ingest_text_directory(
     for start in range(0, len(chunks), batch_size):
         batch = chunks[start : start + batch_size]
         embeddings: list[tuple[DocumentChunk, Sequence[float]]] = []
-        for chunk in batch:
-            vector = (
-                embedding_fn(chunk)
-                if embedding_fn is not None
-                else generate_embedding(
-                    chunk.content,
-                    provider=embedding_provider,
-                    model=embedding_model,
-                    openai_client=openai_client,
-                    google_client=google_client,
-                    voyage_client=voyage_client,
-                    timeout=timeout,
-                )
+        if embedding_fn is not None:
+            embeddings.extend((chunk, embedding_fn(chunk)) for chunk in batch)
+        else:
+            vectors = generate_embeddings_batch(
+                [chunk.content for chunk in batch],
+                provider=embedding_provider,
+                model=embedding_model,
+                timeout=timeout,
+                max_retries=max_retries,
+                openai_client=openai_client,
+                google_client=google_client,
+                voyage_client=voyage_client,
             )
-            embeddings.append((chunk, vector))
+            embeddings.extend(zip(batch, vectors, strict=True))
 
         _upsert_embeddings(
             pool,
