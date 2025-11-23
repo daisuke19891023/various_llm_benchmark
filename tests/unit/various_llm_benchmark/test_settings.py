@@ -23,20 +23,19 @@ def test_validate_keys_requires_api_keys(monkeypatch: pytest.MonkeyPatch) -> Non
     assert "GEMINI_API_KEY" in message
 
 
-def test_validate_keys_require_voyage_when_pgvector_enabled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """pgvector利用時にVoyageのAPIキーが必須となること."""
+def test_validate_keys_allows_pgvector_without_voyage_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Voyage APIキーがなくてもpgvectorを利用できること."""
     monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
     monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")
+    monkeypatch.setenv("VOYAGE_API_KEY", "")
     monkeypatch.setenv("ENABLE_PGVECTOR", "true")
     monkeypatch.setenv("POSTGRES_CONNECTION_STRING", "postgresql://user:pass@localhost:5432/db")
     monkeypatch.setenv("POSTGRES_SCHEMA", "public")
     monkeypatch.setenv("PGVECTOR_TABLE_NAME", "documents")
-    monkeypatch.setenv("EMBEDDING_MODEL", "text-embedding-3-large")
 
-    with pytest.raises(ValueError, match="VOYAGE_API_KEY"):
-        Settings()
+    settings = Settings()
+
+    assert settings.enable_pgvector is True
 
 
 def test_validate_keys_require_postgres_when_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
