@@ -89,7 +89,7 @@ def test_tools_retriever(monkeypatch: pytest.MonkeyPatch) -> None:
         *,
         category: ToolCategory = ToolCategory.BUILTIN,
     ) -> object:
-        assert provider == "gemini"
+        assert provider == "google"
         assert category is ToolCategory.BUILTIN
 
         def retrieve(
@@ -125,7 +125,7 @@ def test_tools_retriever(monkeypatch: pytest.MonkeyPatch) -> None:
             "retriever",
             "query text",
             "--provider",
-            "gemini",
+            "google",
             "--model",
             "embed-v1",
             "--top-k",

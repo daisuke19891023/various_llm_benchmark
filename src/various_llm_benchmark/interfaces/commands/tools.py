@@ -12,6 +12,7 @@ from various_llm_benchmark.interfaces.commands.web_search_clients import resolve
 from various_llm_benchmark.llm.tools.registry import ToolCategory
 
 ProviderName = Literal["openai", "anthropic", "gemini"]
+RetrieverProviderName = Literal["openai", "google", "voyage"]
 
 
 tools_app = typer.Typer(help="LLMの組み込みツール呼び出しを実行します。")
@@ -22,6 +23,14 @@ PROVIDER_OPTION: ProviderName = typer.Option(
     "-p",
     case_sensitive=False,
     help="利用するプロバイダー (openai / anthropic / gemini)",
+)
+
+RETRIEVER_PROVIDER_OPTION: RetrieverProviderName = typer.Option(
+    "openai",
+    "--provider",
+    "-p",
+    case_sensitive=False,
+    help="リトリーバーで利用する埋め込みプロバイダー (openai / google / voyage)",
 )
 
 MODEL_OPTION: str | None = typer.Option(default=None, help="モデル名を上書きします。")
@@ -71,7 +80,7 @@ def web_search(
 @tools_app.command("retriever")
 def retriever(
     query: str,
-    provider: ProviderName = PROVIDER_OPTION,
+    provider: RetrieverProviderName = RETRIEVER_PROVIDER_OPTION,
     model: str | None = MODEL_OPTION,
     top_k: int | None = TOP_K_OPTION,
     threshold: float | None = THRESHOLD_OPTION,

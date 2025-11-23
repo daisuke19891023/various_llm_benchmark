@@ -16,6 +16,6 @@ DB連携のリトリーバーでは、Embedding検索と全文検索の両方を
 PostgreSQLをベースに、pgvectorでEmbedding類似検索、PGroongaで全文検索を行う構成を採用する。単一の接続文字列・スキーマで両方のツールを切り替えられるようにし、環境変数で拡張の有効化やテーブル名を指定する。Dockerfile / docker-compose.ymlで拡張入りのPostgreSQLを起動できるようにし、ローカルとCIの再現性を確保する。
 
 ## 影響
-- 環境変数: `POSTGRES_CONNECTION_STRING`、`POSTGRES_SCHEMA`、`EMBEDDING_MODEL`を必須とし、`ENABLE_PGVECTOR`/`ENABLE_PGROONGA`と各テーブル名で機能を切り替える。
+- 環境変数: `POSTGRES_CONNECTION_STRING`、`POSTGRES_SCHEMA`を必須とし、埋め込みは`OPENAI_EMBEDDING_MODEL`/`OPENAI_EMBEDDING_MODEL_LIGHT`/`GOOGLE_EMBEDDING_MODEL`/`VOYAGE_EMBEDDING_MODEL`または後方互換の`EMBEDDING_MODEL`で指定する。`ENABLE_PGVECTOR`/`ENABLE_PGROONGA`と各テーブル名で機能を切り替える。
 - セットアップ: docker composeで拡張入りPostgreSQLを起動し、必要に応じてスキーマやテーブルを初期化する。`docker/initdb.d`配下に拡張有効化スクリプトを配置し、自動作成する。
 - テスト/運用: 単一RDB構成のためマイグレーション管理がシンプルになる。パフォーマンス要件に応じて接続プールやインデックスの最適化を追加検討する。
