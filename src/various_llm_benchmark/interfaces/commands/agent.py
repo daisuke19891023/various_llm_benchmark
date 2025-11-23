@@ -6,6 +6,7 @@ from typing import Literal
 
 import json
 import typer
+from rich.console import Console
 
 from various_llm_benchmark.agents.providers import AgnoAgentProvider, ProviderName
 from various_llm_benchmark.interfaces.commands.common import build_messages
@@ -19,6 +20,7 @@ from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_p
 from various_llm_benchmark.settings import settings
 
 agent_app = typer.Typer(help="Agnoエージェントを呼び出します。")
+console = Console()
 
 RetrieverProviderName = Literal["openai", "google", "voyage"]
 
@@ -113,8 +115,9 @@ def agent_complete(
 ) -> None:
     """Generate a single-turn response via Agno agent."""
     provider_client = _create_provider(use_light_model=light_model)
-    response = provider_client.complete(prompt, provider=provider, model=model)
-    typer.echo(response.content)
+    with console.status("Agnoエージェントで応答生成中...", spinner="dots"):
+        response = provider_client.complete(prompt, provider=provider, model=model)
+    console.print(response.content)
 
 
 @agent_app.command("chat")
@@ -128,8 +131,9 @@ def agent_chat(
     """Generate an Agno agent response that includes history."""
     messages = build_messages(prompt, history or [], system_prompt=_prompt_template().system)
     provider_client = _create_provider(use_light_model=light_model)
-    response = provider_client.chat(messages, provider=provider, model=model)
-    typer.echo(response.content)
+    with console.status("Agnoエージェントで履歴付き応答を生成中...", spinner="dots"):
+        response = provider_client.chat(messages, provider=provider, model=model)
+    console.print(response.content)
 
 
 @agent_app.command("web-search")
@@ -144,8 +148,9 @@ def agent_web_search(
     search = resolve_web_search_client(
         provider, category=category, use_light_model=light_model,
     )
-    response = search(prompt, model=model)
-    typer.echo(response.content)
+    with console.status("Web検索ツールを呼び出し中...", spinner="dots"):
+        response = search(prompt, model=model)
+    console.print(response.content)
 
 
 @agent_app.command("retriever")
@@ -160,8 +165,15 @@ def agent_retriever(
 ) -> None:
     """DB連携のリトリーバーツールをAgno経由で呼び出します."""
     retriever = resolve_retriever_client(provider, category=category)
-    result = retriever(query, model=model, top_k=top_k, threshold=threshold, timeout=timeout)
-    typer.echo(json.dumps(result, ensure_ascii=False))
+    with console.status("リトリーバーツールを実行中...", spinner="dots"):
+        result = retriever(
+            query,
+            model=model,
+            top_k=top_k,
+            threshold=threshold,
+            timeout=timeout,
+        )
+    console.print_json(json.dumps(result, ensure_ascii=False))
 
 
 @agent_app.command("vision")
@@ -176,5 +188,6 @@ def agent_vision(
     resolved_path = Path(image_path)
     image_input = read_image_file(resolved_path)
     provider_client = _create_provider(use_light_model=light_model)
-    response = provider_client.vision(prompt, image_input, provider=provider, model=model)
-    typer.echo(response.content)
+    with console.status("画像を含む応答を生成中...", spinner="dots"):
+        response = provider_client.vision(prompt, image_input, provider=provider, model=model)
+    console.print(response.content)

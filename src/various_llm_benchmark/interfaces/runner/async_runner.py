@@ -25,10 +25,35 @@ class TaskResult[T]:
         return self.error is None and not self.cancelled
 
 
+class TaskHooks:
+    """Lifecycle callbacks for task execution."""
+
+    def on_start(self, name: str, attempt: int) -> None:
+        """Call when a task attempt is about to start."""
+
+    def on_retry(self, name: str, attempt: int, error: BaseException) -> None:
+        """Call when a task is re-enqueued for retry."""
+
+    def on_success(self, name: str, attempt: int) -> None:
+        """Call when a task completes successfully."""
+
+    def on_failure(self, name: str, attempt: int, error: BaseException) -> None:
+        """Call when a task gives up after retries."""
+
+    def on_cancel(self, name: str, attempt: int) -> None:
+        """Call when a task is cancelled."""
+
+
 class AsyncJobRunner[T]:
     """Asyncio based job runner with retry and cancellation support."""
 
-    def __init__(self, *, concurrency: int = 3, max_retries: int = 0) -> None:
+    def __init__(
+        self,
+        *,
+        concurrency: int = 3,
+        max_retries: int = 0,
+        hooks: TaskHooks | None = None,
+    ) -> None:
         """Initialize the runner with concurrency and retry settings."""
         if concurrency < 1:
             msg = "concurrency must be at least 1"
@@ -41,6 +66,7 @@ class AsyncJobRunner[T]:
         self._max_retries = max_retries
         self._tasks: list[tuple[str, Callable[[], Awaitable[T]]]] = []
         self._cancel_event = asyncio.Event()
+        self._hooks = hooks or TaskHooks()
 
     def add_task(
         self,
@@ -98,12 +124,15 @@ class AsyncJobRunner[T]:
             except asyncio.CancelledError:
                 break
 
+            current_attempt = attempt + 1
+            self._hooks.on_start(task_name, current_attempt)
             if self._cancel_event.is_set():
                 results[task_id] = TaskResult(
                     name=task_name,
-                    attempts=attempt + 1,
+                    attempts=current_attempt,
                     cancelled=True,
                 )
+                self._hooks.on_cancel(task_name, current_attempt)
                 queue.task_done()
                 continue
 
@@ -112,25 +141,29 @@ class AsyncJobRunner[T]:
             except asyncio.CancelledError:
                 results[task_id] = TaskResult(
                     name=task_name,
-                    attempts=attempt + 1,
+                    attempts=current_attempt,
                     cancelled=True,
                 )
                 queue.task_done()
+                self._hooks.on_cancel(task_name, current_attempt)
                 raise
             except Exception as exc:
                 if attempt < self._max_retries and not self._cancel_event.is_set():
+                    self._hooks.on_retry(task_name, current_attempt, exc)
                     await queue.put((task_id, task_name, task_callable, attempt + 1))
                 else:
                     results[task_id] = TaskResult(
                         name=task_name,
                         error=exc,
-                        attempts=attempt + 1,
+                        attempts=current_attempt,
                     )
+                    self._hooks.on_failure(task_name, current_attempt, exc)
             else:
                 results[task_id] = TaskResult(
                     name=task_name,
                     result=result,
-                    attempts=attempt + 1,
+                    attempts=current_attempt,
                 )
+                self._hooks.on_success(task_name, current_attempt)
             finally:
                 queue.task_done()

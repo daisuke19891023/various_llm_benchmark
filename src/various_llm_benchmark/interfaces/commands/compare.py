@@ -4,16 +4,26 @@ import asyncio
 import json
 from functools import cache
 from pathlib import Path
+from time import perf_counter
 from typing import TYPE_CHECKING, cast
+from textwrap import shorten
 
 import typer
 from anthropic import Anthropic
 from google.genai import Client
 from openai import OpenAI
 from pydantic import BaseModel, Field
+from rich.box import SIMPLE_HEAD
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, TaskID, TextColumn, TimeElapsedColumn
+from rich.table import Table
 
 from various_llm_benchmark.interfaces.commands.common import parse_history
-from various_llm_benchmark.interfaces.runner import AsyncJobRunner, TaskResult
+from various_llm_benchmark.interfaces.runner import (
+    AsyncJobRunner,
+    TaskHooks,
+    TaskResult,
+)
 from various_llm_benchmark.llm.providers.anthropic.client import AnthropicLLMClient
 from various_llm_benchmark.llm.providers.gemini.client import GeminiLLMClient
 from various_llm_benchmark.llm.providers.openai.client import OpenAILLMClient
@@ -26,7 +36,8 @@ if TYPE_CHECKING:
 
     from various_llm_benchmark.llm.protocol import LLMClient
 
-compare_app = typer.Typer(help="複数プロバイダーの応答を比較します。")
+compare_app = typer.Typer(help="複数プロバイダーの応答をProgress表示付きで比較します。")
+console = Console()
 
 HISTORY_OPTION: list[str] | None = typer.Option(
     None,
@@ -156,12 +167,17 @@ class CompareService:
         self._client_factories = client_factories or CLIENT_FACTORIES
 
     async def run_async(
-        self, *, concurrency: int = 3, max_retries: int = 0,
+        self,
+        *,
+        concurrency: int = 3,
+        max_retries: int = 0,
+        hooks: TaskHooks | None = None,
     ) -> list[ComparisonResult]:
         """Execute chat requests for all targets and collect results asynchronously."""
         runner: AsyncJobRunner[ComparisonResult] = AsyncJobRunner(
             concurrency=concurrency,
             max_retries=max_retries,
+            hooks=hooks,
         )
         for target in self._targets:
             runner.add_task(self._execute_target, target, name=f"compare-{target.provider}")
@@ -204,9 +220,17 @@ class CompareService:
 
         return results
 
-    def run(self, *, concurrency: int = 3, max_retries: int = 0) -> list[ComparisonResult]:
+    def run(
+        self,
+        *,
+        concurrency: int = 3,
+        max_retries: int = 0,
+        hooks: TaskHooks | None = None,
+    ) -> list[ComparisonResult]:
         """Run comparisons synchronously via :meth:`run_async`."""
-        return asyncio.run(self.run_async(concurrency=concurrency, max_retries=max_retries))
+        return asyncio.run(
+            self.run_async(concurrency=concurrency, max_retries=max_retries, hooks=hooks),
+        )
 
     async def _execute_target(self, target: ComparisonTarget) -> ComparisonResult:
         provider_key = target.normalized_provider
@@ -265,6 +289,98 @@ class CompareService:
         return typed_client.chat(messages, model=model_name)
 
 
+def _short_error(message: str) -> str:
+    return shorten(message, width=80, placeholder="…")
+
+
+def _build_progress(
+    progress: Progress,
+    targets: list[ComparisonTarget],
+) -> dict[str, TaskID]:
+    task_ids: dict[str, TaskID] = {}
+    for target in targets:
+        provider_key = target.normalized_provider
+        model_label = target.model or DEFAULT_MODELS.get(provider_key, "default")
+        description = f"{target.provider}:{model_label}"
+        task_name = f"compare-{target.provider}"
+        task_ids[task_name] = progress.add_task(
+            description,
+            total=1,
+            start=False,
+            fields={"status": "待機中"},
+        )
+    return task_ids
+
+
+class ProgressTaskHooks(TaskHooks):
+    """Render task lifecycle updates to a :class:`Progress` instance."""
+
+    def __init__(self, progress: Progress, task_ids: dict[str, TaskID]) -> None:
+        """Initialize with a progress renderer and registered task IDs."""
+        self._progress = progress
+        self._task_ids = task_ids
+
+    def _task_id(self, name: str) -> TaskID | None:
+        return self._task_ids.get(name)
+
+    def on_start(self, name: str, attempt: int) -> None:
+        """Start a task and mark it as running."""
+        task_id = self._task_id(name)
+        if task_id is None:
+            return
+        self._progress.start_task(task_id)
+        self._progress.update(
+            task_id,
+            completed=0,
+            fields={"status": f"[cyan]実行中[/cyan] (試行 {attempt})"},
+        )
+
+    def on_retry(self, name: str, attempt: int, error: BaseException) -> None:
+        """Show retry status with the latest error message."""
+        task_id = self._task_id(name)
+        if task_id is None:
+            return
+        message = _short_error(str(error))
+        self._progress.update(
+            task_id,
+            fields={"status": f"[yellow]リトライ[/yellow] (試行 {attempt}, 失敗: {message})"},
+        )
+
+    def on_success(self, name: str, attempt: int) -> None:
+        """Mark a task as successfully finished."""
+        task_id = self._task_id(name)
+        if task_id is None:
+            return
+        self._progress.update(
+            task_id,
+            completed=1,
+            fields={"status": f"[green]完了[/green] ({attempt}回目)"},
+        )
+
+    def on_failure(self, name: str, attempt: int, error: BaseException) -> None:
+        """Surface a terminal failure with the latest attempt count."""
+        task_id = self._task_id(name)
+        if task_id is None:
+            return
+        message = _short_error(str(error))
+        self._progress.update(
+            task_id,
+            completed=1,
+            fields={"status": f"[red]失敗[/red] (試行 {attempt}): {message}"},
+        )
+
+    def on_cancel(self, name: str, attempt: int) -> None:
+        """Mark a task as cancelled."""
+        task_id = self._task_id(name)
+        if task_id is None:
+            return
+        self._progress.update(
+            task_id,
+            completed=1,
+            fields={"status": f"[magenta]キャンセル[/magenta] (試行 {attempt})"},
+        )
+
+
 def _parse_targets(targets: list[str] | None) -> list[ComparisonTarget]:
     if not targets:
         return [
@@ -283,23 +399,20 @@ def _parse_targets(targets: list[str] | None) -> list[ComparisonTarget]:
     return parsed_targets
 
 
-def _render_table(results: list[ComparisonResult]) -> str:
-    headers = ["Provider", "Model", "Content or Error"]
-    rows: list[list[str]] = []
+def _render_table(results: list[ComparisonResult]) -> Table:
+    table = Table(title="Comparison Results", box=SIMPLE_HEAD)
+    table.add_column("Provider", style="bold")
+    table.add_column("Model")
+    table.add_column("Content or Error", overflow="fold")
+
     for result in results:
-        body = result.content if result.error is None else f"ERROR: {result.error}"
-        normalized_body = body.replace("\n", " ") if body is not None else ""
-        rows.append([result.provider, result.model, normalized_body])
-
-    column_widths = [max(len(row[idx]) for row in [headers, *rows]) for idx in range(3)]
-
-    def _format_row(row: list[str]) -> str:
-        return " | ".join(value.ljust(column_widths[idx]) for idx, value in enumerate(row))
-
-    divider = "-+-".join("-" * width for width in column_widths)
-    formatted_rows = [_format_row(headers), divider]
-    formatted_rows.extend(_format_row(row) for row in rows)
-    return "\n".join(formatted_rows)
+        body = (
+            f"[red]ERROR[/red]: {result.error}"
+            if result.error is not None
+            else result.content or ""
+        )
+        table.add_row(result.provider, result.model, body)
+    return table
 
 
 def _results_to_json(results: list[ComparisonResult]) -> str:
@@ -307,7 +420,7 @@ def _results_to_json(results: list[ComparisonResult]) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
-def _render_results(results: list[ComparisonResult], output_format: str) -> str:
+def _render_results(results: list[ComparisonResult], output_format: str) -> Table | str:
     normalized_format = output_format.lower()
     if normalized_format == "table":
         return _render_table(results)
@@ -331,13 +444,39 @@ def compare_chat(
     messages_history = parse_history(history or [])
     parsed_targets = _parse_targets(targets)
     service = CompareService(prompt=prompt, history=messages_history, targets=parsed_targets)
-    results = asyncio.run(
-        service.run_async(concurrency=concurrency, max_retries=retries),
+    console.print(
+        f"[bold cyan]比較を開始します[/bold cyan] "
+        f"(タスク {len(parsed_targets)} 件, 並列 {concurrency}, リトライ {retries})",
     )
+    start_time = perf_counter()
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("{task.description}"),
+        TextColumn("{task.fields[status]}", justify="right"),
+        TimeElapsedColumn(),
+        console=console,
+    ) as progress:
+        task_ids = _build_progress(progress, parsed_targets)
+        hooks = ProgressTaskHooks(progress, task_ids)
+        results = asyncio.run(
+            service.run_async(
+                concurrency=concurrency,
+                max_retries=retries,
+                hooks=hooks,
+            ),
+        )
+
+    elapsed_seconds = perf_counter() - start_time
+    console.print(f"[green]比較完了[/green] (経過 {elapsed_seconds:.2f} 秒)")
 
     rendered_output = _render_results(results, output_format)
-    typer.echo(rendered_output)
+    if isinstance(rendered_output, Table):
+        console.print(rendered_output)
+    else:
+        console.print_json(rendered_output)
 
     if output_file is not None:
         output_path = Path(output_file)
-        output_path.write_text(_results_to_json(results), encoding="utf-8")
+        with console.status(f"結果を {output_path} に保存中...", spinner="dots"):
+            output_path.write_text(_results_to_json(results), encoding="utf-8")
+        console.print(f"[green]保存完了[/green]: {output_path}")

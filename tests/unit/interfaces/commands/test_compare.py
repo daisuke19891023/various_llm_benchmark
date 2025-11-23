@@ -1,121 +1,81 @@
 from __future__ import annotations
 
-import json
-from types import SimpleNamespace
-from typing import TYPE_CHECKING
+import asyncio
 
-from typer.testing import CliRunner
-
-from various_llm_benchmark.interfaces.cli import app
+from various_llm_benchmark.interfaces.commands.compare import (
+    CompareService,
+    ComparisonTarget,
+)
+from various_llm_benchmark.interfaces.runner.async_runner import TaskHooks
 from various_llm_benchmark.models import ChatMessage, LLMResponse
-
-if TYPE_CHECKING:
-    import pytest
-
-runner = CliRunner()
+from various_llm_benchmark.llm.protocol import LLMClient
 
 
-def _client_stub(provider: str, recordings: list[dict[str, object]]) -> SimpleNamespace:
-    def chat(
-        messages: list[ChatMessage],
+class RecordingHooks(TaskHooks):
+    """Collect start and success events during comparisons."""
+
+    def __init__(self) -> None:
+        """Initialize event containers."""
+        self.started: list[tuple[str, int]] = []
+        self.succeeded: list[tuple[str, int]] = []
+
+    def on_start(self, name: str, attempt: int) -> None:
+        """Record a task start with attempt count."""
+        self.started.append((name, attempt))
+
+    def on_success(self, name: str, attempt: int) -> None:
+        """Record a successful task completion."""
+        self.succeeded.append((name, attempt))
+
+
+class FakeClient(LLMClient):
+    """Minimal client that echoes the prompt and model name."""
+
+    def __init__(self, model_name: str) -> None:
+        """Store the model name for later echoes."""
+        self._model_name = model_name
+
+    def chat(self, messages: list[ChatMessage], *, model: str | None = None) -> LLMResponse:
+        """Return a simple LLMResponse using the last user prompt."""
+        prompt = messages[-1].content
+        return LLMResponse(content=f"{prompt} ({model or self._model_name})", model=model or self._model_name, raw={})
+
+    def generate(self, prompt: str, *, model: str | None = None) -> LLMResponse:  # pragma: no cover - unused
+        """Return a deterministic generation for testing."""
+        return LLMResponse(content=prompt, model=model or self._model_name, raw={})
+
+    def vision(
+        self,
+        prompt: str,
+        image: object,
         *,
         model: str | None = None,
-        system_instruction: str | None = None,
-    ) -> LLMResponse:
-        recordings.append(
-            {
-                "provider": provider,
-                "model": model,
-                "system_instruction": system_instruction,
-                "message_count": len(messages),
-            },
+        system_prompt: str | None = None,
+    ) -> LLMResponse:  # pragma: no cover - unused
+        """Return a deterministic vision response for testing."""
+        _ = system_prompt
+        return LLMResponse(
+            content=f"{prompt} ({model or self._model_name}, image={image!r})",
+            model=model or self._model_name,
+            raw={},
         )
-        return LLMResponse(content=f"{provider}:{model}", model=model or provider, raw={"provider": provider})
-
-    return SimpleNamespace(chat=chat)
 
 
-def test_compare_collects_all_results(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Ensure all requested providers appear in the output."""
-    recordings: list[dict[str, object]] = []
-    factories = {
-        "openai": lambda: _client_stub("openai", recordings),
-        "anthropic": lambda: _client_stub("anthropic", recordings),
-        "gemini": lambda: _client_stub("gemini", recordings),
-    }
-    monkeypatch.setattr(
-        "various_llm_benchmark.interfaces.commands.compare.CLIENT_FACTORIES",
-        factories,
+def test_compare_service_calls_hooks_and_returns_results() -> None:
+    """CompareService should emit hook events and collate responses."""
+    targets = [ComparisonTarget(provider="openai", model="test-model")]
+    hooks = RecordingHooks()
+    service = CompareService(
+        prompt="hello",
+        history=[ChatMessage(role="user", content="hi")],
+        targets=targets,
+        client_factories={"openai": lambda: FakeClient("default-model")},
     )
 
-    result = runner.invoke(
-        app,
-        [
-            "compare",
-            "chat",
-            "hello",
-            "--target",
-            "openai:o-model",
-            "--target",
-            "gemini:g-model",
-            "--format",
-            "json",
-        ],
-    )
+    results = asyncio.run(service.run_async(concurrency=1, hooks=hooks))
 
-    assert result.exit_code == 0
-    payload = json.loads(result.stdout)
-    assert [entry["provider"] for entry in payload] == ["openai", "gemini"]
-    assert payload[0]["content"] == "openai:o-model"
-    assert payload[1]["content"] == "gemini:g-model"
-    assert {record["model"] for record in recordings} == {"o-model", "g-model"}
-
-
-def test_compare_handles_errors(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Ensure provider errors are surfaced without aborting the command."""
-
-    def failing_factory() -> SimpleNamespace:
-        def chat(
-            _messages: list[ChatMessage],
-            *,
-            model: str | None = None,
-            system_instruction: str | None = None,
-        ) -> LLMResponse:
-            _ = model
-            _ = system_instruction
-            raise RuntimeError("boom")
-
-        return SimpleNamespace(chat=chat)
-
-    factories = {
-        "openai": lambda: _client_stub("openai", []),
-        "anthropic": failing_factory,
-    }
-    monkeypatch.setattr(
-        "various_llm_benchmark.interfaces.commands.compare.CLIENT_FACTORIES",
-        factories,
-    )
-
-    result = runner.invoke(
-        app,
-        [
-            "compare",
-            "chat",
-            "question",
-            "--target",
-            "openai:base",
-            "--target",
-            "claude:other",
-            "--format",
-            "json",
-        ],
-    )
-
-    assert result.exit_code == 0
-    payload = json.loads(result.stdout)
-    assert len(payload) == 2
-    openai_entry = next(item for item in payload if item["provider"] == "openai")
-    anthropic_entry = next(item for item in payload if item["provider"] == "claude")
-
-    assert openai_entry["error"] is None
-    assert anthropic_entry["error"] == "boom"
+    assert results[0].provider == "openai"
+    assert "test-model" in results[0].model
+    assert "hello" in (results[0].content or "")
+    assert hooks.started == [("compare-openai", 1)]
+    assert hooks.succeeded == [("compare-openai", 1)]

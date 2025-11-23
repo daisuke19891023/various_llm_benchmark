@@ -4,6 +4,7 @@ import json
 from typing import Literal
 
 import typer
+from rich.console import Console
 
 from various_llm_benchmark.interfaces.commands.retriever_clients import (
     resolve_retriever_client,
@@ -16,6 +17,7 @@ RetrieverProviderName = Literal["openai", "google", "voyage"]
 
 
 tools_app = typer.Typer(help="LLMの組み込みツール呼び出しを実行します。")
+console = Console()
 
 PROVIDER_OPTION: ProviderName = typer.Option(
     "openai",
@@ -73,8 +75,9 @@ def web_search(
     search = resolve_web_search_client(
         provider, category=category, use_light_model=light_model,
     )
-    response = search(prompt, model=model)
-    typer.echo(response.content)
+    with console.status("組み込みWeb検索ツールを呼び出し中...", spinner="dots"):
+        response = search(prompt, model=model)
+    console.print(response.content)
 
 
 @tools_app.command("retriever")
@@ -89,5 +92,12 @@ def retriever(
 ) -> None:
     """DB連携の検索リトリーバーを呼び出します."""
     executor = resolve_retriever_client(provider, category=category)
-    result = executor(query, model=model, top_k=top_k, threshold=threshold, timeout=timeout)
-    typer.echo(json.dumps(result, ensure_ascii=False))
+    with console.status("リトリーバーを実行中...", spinner="dots"):
+        result = executor(
+            query,
+            model=model,
+            top_k=top_k,
+            threshold=threshold,
+            timeout=timeout,
+        )
+    console.print_json(json.dumps(result, ensure_ascii=False))
