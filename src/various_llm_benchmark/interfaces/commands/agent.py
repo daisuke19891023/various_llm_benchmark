@@ -3,11 +3,15 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
+import json
 import typer
 
 from various_llm_benchmark.agents.providers import AgnoAgentProvider, ProviderName
 from various_llm_benchmark.interfaces.commands.common import build_messages
 from various_llm_benchmark.media.images import read_image_file
+from various_llm_benchmark.interfaces.commands.retriever_clients import (
+    resolve_retriever_client,
+)
 from various_llm_benchmark.interfaces.commands.web_search_clients import resolve_web_search_client
 from various_llm_benchmark.llm.tools.registry import ToolCategory
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
@@ -46,6 +50,22 @@ CATEGORY_OPTION: ToolCategory = typer.Option(
     default=ToolCategory.BUILTIN,
     case_sensitive=False,
     help="利用するツールカテゴリ (builtin / mcp / external)",
+)
+THRESHOLD_OPTION: float | None = typer.Option(
+    None,
+    help="スコアのしきい値 (0-1)。未指定の場合は設定値を使用します。",
+    min=0.0,
+    max=1.0,
+)
+TOP_K_OPTION: int | None = typer.Option(
+    None,
+    help="返却件数の上限。未指定の場合は設定値を使用します。",
+    min=1,
+)
+TIMEOUT_OPTION: float = typer.Option(
+    5.0,
+    help="DB検索や埋め込み取得のタイムアウト (秒)",
+    min=0.0,
 )
 
 
@@ -115,6 +135,22 @@ def agent_web_search(
     )
     response = search(prompt, model=model)
     typer.echo(response.content)
+
+
+@agent_app.command("retriever")
+def agent_retriever(
+    query: str,
+    provider: ProviderName = PROVIDER_OPTION,
+    model: str | None = MODEL_OPTION,
+    top_k: int | None = TOP_K_OPTION,
+    threshold: float | None = THRESHOLD_OPTION,
+    timeout: float = TIMEOUT_OPTION,
+    category: ToolCategory = CATEGORY_OPTION,
+) -> None:
+    """DB連携のリトリーバーツールをAgno経由で呼び出します."""
+    retriever = resolve_retriever_client(provider, category=category)
+    result = retriever(query, model=model, top_k=top_k, threshold=threshold, timeout=timeout)
+    typer.echo(json.dumps(result, ensure_ascii=False))
 
 
 @agent_app.command("vision")

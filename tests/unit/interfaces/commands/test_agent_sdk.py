@@ -119,3 +119,68 @@ def test_agent_sdk_web_search_uses_resolver(monkeypatch: pytest.MonkeyPatch) -> 
         "model": "gpt-5.1",
     }
     assert "web-sdk" in result.stdout
+
+
+def test_agent_sdk_retriever_uses_resolver(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Retrieverコマンドがresolver経由で呼び出されることを確認する."""
+    captured: list[dict[str, object]] = []
+
+    def fake_resolver(
+        provider: str,
+        *,
+        category: ToolCategory = ToolCategory.BUILTIN,
+    ) -> object:
+        assert provider == "openai"
+        assert category is ToolCategory.BUILTIN
+
+        def retrieve(
+            query: str,
+            *,
+            model: str | None = None,
+            top_k: int | None = None,
+            threshold: float | None = None,
+            timeout: float = 5.0,
+        ) -> dict[str, object]:
+            captured.append(
+                {
+                    "query": query,
+                    "model": model,
+                    "top_k": top_k,
+                    "threshold": threshold,
+                    "timeout": timeout,
+                },
+            )
+            return {"documents": []}
+
+        return retrieve
+
+    monkeypatch.setattr(agent_sdk_cmd, "resolve_retriever_client", fake_resolver)
+
+    result = runner.invoke(
+        cli.app,
+        [
+            "agent-sdk",
+            "retriever",
+            "topic",
+            "--model",
+            "embed-v1",
+            "--top-k",
+            "6",
+            "--threshold",
+            "0.4",
+            "--timeout",
+            "2.0",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured == [
+        {
+            "query": "topic",
+            "model": "embed-v1",
+            "top_k": 6,
+            "threshold": 0.4,
+            "timeout": 2.0,
+        },
+    ]
+    assert "documents" in result.stdout

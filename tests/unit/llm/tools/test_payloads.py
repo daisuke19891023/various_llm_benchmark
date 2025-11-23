@@ -16,6 +16,8 @@ from various_llm_benchmark.llm.tools.registry import (
     NativeToolType,
     ToolCategory,
     ToolRegistration,
+    RETRIEVER_INPUT_SCHEMA,
+    RETRIEVER_TAG,
     WEB_SEARCH_TAG,
 )
 
@@ -48,6 +50,19 @@ def _web_search_tool() -> ToolRegistration:
         input_schema={"type": "object"},
         tags={WEB_SEARCH_TAG, "provider:openai"},
         native_type=NativeToolType.WEB_SEARCH,
+        handler=_noop,
+        category=ToolCategory.BUILTIN,
+    )
+
+
+def _retriever_tool() -> ToolRegistration:
+    return ToolRegistration(
+        id="retriever/openai",
+        name="openai-retriever",
+        description="Hybrid retriever",
+        input_schema=RETRIEVER_INPUT_SCHEMA,
+        tags={RETRIEVER_TAG, "provider:openai"},
+        native_type=NativeToolType.RETRIEVER,
         handler=_noop,
         category=ToolCategory.BUILTIN,
     )
@@ -103,4 +118,23 @@ def test_web_search_detection_prefers_native_flag() -> None:
     web_search.tags = {"provider:openai"}
 
     assert to_openai_tools_payload([web_search]) == [{"type": "web_search"}]
+
+
+def test_function_payload_includes_retriever_schema() -> None:
+    """Retrieverツールのスキーマが各プロバイダー向けpayloadに反映される."""
+    retriever = _retriever_tool()
+
+    openai_payload = to_openai_tools_payload([retriever])
+    anthropic_payload = to_anthropic_tools_payload([retriever])
+    gemini_payload = to_gemini_tools_payload([retriever])
+
+    function_def = cast("dict[str, Any]", cast("dict[str, Any]", openai_payload[0])["function"])
+    anthropic_def = cast("dict[str, Any]", anthropic_payload[0])
+    gemini_tool = cast("dict[str, Any]", gemini_payload[0])
+    gemini_declarations = cast("list[object]", gemini_tool["function_declarations"])
+    gemini_def = cast("dict[str, Any]", gemini_declarations[0])
+
+    assert function_def["name"] == "openai-retriever"
+    assert cast("dict[str, Any]", anthropic_def["input_schema"]) == RETRIEVER_INPUT_SCHEMA
+    assert cast("dict[str, Any]", gemini_def["parameters"]) == RETRIEVER_INPUT_SCHEMA
 

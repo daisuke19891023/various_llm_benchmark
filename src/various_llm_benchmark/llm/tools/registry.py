@@ -21,6 +21,7 @@ class NativeToolType(StrEnum):
     """Known LLM-native tools handled by the provider itself."""
 
     WEB_SEARCH = "web_search"
+    RETRIEVER = "retriever"
 
 
 class ToolRegistration(BaseModel):
@@ -40,6 +41,33 @@ class ToolRegistration(BaseModel):
 
 
 WEB_SEARCH_TAG = "web_search"
+RETRIEVER_TAG = "retriever"
+RETRIEVER_TOOL_NAMESPACE = "retriever"
+RETRIEVER_INPUT_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "properties": {
+        "query": {"type": "string", "description": "検索クエリ"},
+        "model": {"type": "string", "description": "埋め込みモデルを上書き"},
+        "top_k": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "検索する件数の上限",
+        },
+        "threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "スコアの下限値",
+        },
+        "timeout": {
+            "type": "number",
+            "minimum": 0,
+            "description": "DBアクセスや埋め込み取得のタイムアウト (秒)",
+            "default": 5.0,
+        },
+    },
+    "required": ["query"],
+}
 
 
 _registry: dict[str, ToolRegistration] = {}
