@@ -58,9 +58,17 @@ def create_provider(
     temperature: float | None = None,
 ) -> PydanticAIAgentProvider:
     """Create a configured Pydantic AI provider instance."""
-    os.environ.setdefault("OPENAI_API_KEY", settings.openai_api_key.get_secret_value())
+    pydantic_ai_key = settings.pydantic_ai_api_key.get_secret_value()
+    openai_key = settings.openai_api_key.get_secret_value()
+    if pydantic_ai_key:
+        os.environ.setdefault("PYDANTIC_AI_API_KEY", pydantic_ai_key)
+    if openai_key:
+        os.environ.setdefault("OPENAI_API_KEY", openai_key)
+
     resolved_model = model or (
-        settings.openai_light_model if use_light_model else settings.openai_model
+        settings.pydantic_ai_light_model
+        if use_light_model
+        else settings.pydantic_ai_model
     )
     resolved_temperature = settings.default_temperature if temperature is None else temperature
     return PydanticAIAgentProvider(
