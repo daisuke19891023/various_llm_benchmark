@@ -10,11 +10,12 @@ TyperベースのCLIで複数のLLMやエージェントフレームワークを
 2. `.env.example`を参考に`.env`を作成し、各APIキーを設定します。
 3. PostgreSQLによるベクトル/全文検索を利用する場合は、以下も設定します。
    - `POSTGRES_CONNECTION_STRING`: 接続文字列 (例: `postgresql://user:password@localhost:5432/dbname`)
-   - `POSTGRES_SCHEMA`: 利用するスキーマ名
+   - `POSTGRES_SCHEMA`: 利用するスキーマ名 (デフォルト: `public`)
    - `PGVECTOR_TABLE_NAME` / `PGROONGA_TABLE_NAME`: 各拡張で利用するテーブル名
-   - `ENABLE_PGVECTOR` / `ENABLE_PGROONGA`: 拡張を有効化するフラグ
-   - `SEARCH_TOP_K` / `SEARCH_SCORE_THRESHOLD`: 検索での上位件数とスコア閾値
-   - `EMBEDDING_MODEL`: 埋め込みモデル名
+   - `ENABLE_PGVECTOR` / `ENABLE_PGROONGA`: 拡張を有効化するフラグ (デフォルト: `false`)
+   - `SEARCH_TOP_K` / `SEARCH_SCORE_THRESHOLD`: 検索での上位件数とスコア閾値 (デフォルト: それぞれ`5`/`0.0`)
+   - `EMBEDDING_MODEL`: 埋め込みモデル名 (例: `text-embedding-3-small`)
+   - Dockerでpgvector + PGroongaを起動する場合は`docker-compose.yml`を利用できます (`docker compose up -d db`)
 
 ## プロンプト管理
 - システムプロンプトは`src/various_llm_benchmark/prompts/`以下のYAMLで管理します。
@@ -106,6 +107,20 @@ uv run various-llm-benchmark tools web-search "最新の検索結果を教えて
 uv run various-llm-benchmark agent web-search "設計指針を調査して" --provider openai --light-model
 uv run various-llm-benchmark agent-sdk web-search "最新のAPI例を調べて" --light-model
 ```
+
+### ツール呼び出し (Retriever)
+pgvector/PGroongaを利用したDB検索リトリーバーを呼び出せます。環境変数`POSTGRES_CONNECTION_STRING`、`POSTGRES_SCHEMA`、`EMBEDDING_MODEL`に加え、有効化したい拡張と対応するテーブル名を設定してください。
+
+```bash
+# 組み込みツール経由
+uv run various-llm-benchmark tools retriever "対話履歴を検索して" --provider openai --top-k 5 --threshold 0.2
+
+# Agent / Agents SDK 経由
+uv run various-llm-benchmark agent retriever "重要メモを探して" --provider anthropic --light-model
+uv run various-llm-benchmark agent-sdk retriever "ナレッジを検索して" --top-k 3
+```
+
+pgvectorを使う場合は`ENABLE_PGVECTOR=true`と`PGVECTOR_TABLE_NAME`を、PGroongaを使う場合は`ENABLE_PGROONGA=true`と`PGROONGA_TABLE_NAME`を設定します。`SEARCH_TOP_K`と`SEARCH_SCORE_THRESHOLD`を指定すると検索件数やスコア閾値を上書きできます。DockerでPostgreSQLを立ち上げる際は`docker compose up -d db`で拡張入りのインスタンスが起動します。
 
 ## 開発
 - 設定は`pydantic-settings`経由で読み込みます。環境変数を直接参照せず`Settings`を利用してください。
