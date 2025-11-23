@@ -91,3 +91,23 @@ async def test_runner_drains_queue_after_task_cancellation() -> None:
 
     assert len(results) == 2
     assert all(result.cancelled for result in results)
+
+
+@pytest.mark.asyncio
+async def test_runner_propagates_cancellation_from_caller() -> None:
+    """Cancellation of the run coroutine should not hang workers."""
+
+    async def long_task() -> str:
+        await asyncio.sleep(1)
+        return "done"
+
+    runner = AsyncJobRunner[str](concurrency=1)
+    runner.add_task(long_task, name="long-task")
+
+    run_task = asyncio.create_task(runner.run())
+
+    with pytest.raises(asyncio.TimeoutError):
+        await asyncio.wait_for(run_task, timeout=0.05)
+
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(run_task, timeout=0.5)
