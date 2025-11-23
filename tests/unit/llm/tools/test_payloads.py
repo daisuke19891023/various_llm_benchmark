@@ -21,6 +21,7 @@ from various_llm_benchmark.llm.tools.registry import (
     ToolRegistration,
     RETRIEVER_INPUT_SCHEMA,
     RETRIEVER_TAG,
+    SHELL_TAG,
     WEB_SEARCH_TAG,
 )
 
@@ -79,6 +80,19 @@ def _code_execution_tool() -> ToolRegistration:
         input_schema={"type": "object"},
         tags={CODE_EXECUTION_TAG},
         native_type=NativeToolType.CODE_EXECUTION,
+        handler=_noop,
+        category=ToolCategory.BUILTIN,
+    )
+
+
+def _shell_tool() -> ToolRegistration:
+    return ToolRegistration(
+        id="shell/run",
+        name="bash-execute",
+        description="Execute shell commands",
+        input_schema={"type": "object"},
+        tags={SHELL_TAG},
+        native_type=NativeToolType.SHELL,
         handler=_noop,
         category=ToolCategory.BUILTIN,
     )
@@ -191,4 +205,31 @@ def test_native_code_execution_payloads() -> None:
     gemini_tool = gemini_payload[0]
     assert gemini_tool.code_execution is not None
     assert isinstance(gemini_tool.code_execution, genai_types.ToolCodeExecution)
+
+
+def test_shell_tools_convert_to_bash_payloads() -> None:
+    """Shellツールは各プロバイダーのbashツールに変換される."""
+    shell_tool = _shell_tool()
+
+    openai_payload = to_openai_tools_payload([shell_tool])
+    anthropic_payload = to_anthropic_tools_payload([shell_tool])
+
+    assert openai_payload == [{"type": "bash"}]
+    assert anthropic_payload == [{"type": "bash", "name": "bash-execute"}]
+
+
+def test_shell_tool_provider_override_is_honored() -> None:
+    """プロバイダーごとの上書きがShellツールにも適用される."""
+    shell_tool = _shell_tool()
+    shell_tool.provider_overrides = {
+        "openai": {"type": "bash", "name": "custom-shell"},
+        "anthropic": {"type": "bash", "name": "custom-shell"},
+    }
+
+    assert to_openai_tools_payload([shell_tool]) == [
+        {"type": "bash", "name": "custom-shell"},
+    ]
+    assert to_anthropic_tools_payload([shell_tool]) == [
+        {"type": "bash", "name": "custom-shell"},
+    ]
 

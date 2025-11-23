@@ -23,6 +23,7 @@ class NativeToolType(StrEnum):
     WEB_SEARCH = "web_search"
     RETRIEVER = "retriever"
     CODE_EXECUTION = "code_execution"
+    SHELL = "shell"
 
 
 class ToolRegistration(BaseModel):
@@ -43,6 +44,7 @@ class ToolRegistration(BaseModel):
 
 WEB_SEARCH_TAG = "web_search"
 CODE_EXECUTION_TAG = "code_execution"
+SHELL_TAG = "shell"
 RETRIEVER_TAG = "retriever"
 RETRIEVER_TOOL_NAMESPACE = "retriever"
 RETRIEVER_INPUT_SCHEMA: dict[str, object] = {
