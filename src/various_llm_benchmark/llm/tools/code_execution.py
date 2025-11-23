@@ -2,6 +2,8 @@
 
 from collections.abc import Iterable
 from contextlib import redirect_stderr, redirect_stdout
+import signal
+from types import FrameType, TracebackType
 from dataclasses import dataclass
 import typing as t
 from typing import Any, TypeGuard
@@ -97,7 +99,7 @@ class SafeCodeExecutor:
             msg = f"Unsupported language: {language}"
             raise ValueError(msg)
 
-        _ = timeout_seconds or self._timeout
+        execution_timeout = timeout_seconds or self._timeout
         stdout_buffer = StringIO()
         stderr_buffer = StringIO()
         context = ToolExecutionContext(allowed_tool_ids) if allowed_tool_ids else None
@@ -113,10 +115,14 @@ class SafeCodeExecutor:
             with tempfile.TemporaryDirectory() as temp_dir:
                 script_path = Path(temp_dir) / "snippet.py"
                 script_path.write_text(code)
-                with redirect_stdout(stdout_buffer), redirect_stderr(stderr_buffer):
+                with (
+                    TimeoutGuard(execution_timeout),
+                    redirect_stdout(stdout_buffer),
+                    redirect_stderr(stderr_buffer),
+                ):
                     runpy.run_path(str(script_path), run_name="__main__", init_globals=init_globals)
             exit_code = 0
-        except Exception as exc:
+        except (Exception, SystemExit, KeyboardInterrupt) as exc:
             stderr_buffer.write(str(exc))
             exit_code = 1
 
@@ -128,6 +134,41 @@ class SafeCodeExecutor:
 
 
 _executor = SafeCodeExecutor()
+
+
+class TimeoutGuard:
+    """Context manager enforcing a real-time execution limit using ``SIGALRM``."""
+
+    def __init__(self, seconds: float) -> None:
+        """Initialize timeout guard with the requested duration."""
+        self._seconds = seconds
+        self._original_handler: signal.Handlers | None = None
+
+    def __enter__(self) -> None:
+        """Start the alarm timer when entering the context."""
+        if self._seconds <= 0:
+            return
+
+        def _handle_timeout(_signum: int, _frame: FrameType | None) -> None:
+            message = f"Execution exceeded {self._seconds} seconds"
+            raise TimeoutError(message)
+
+        self._original_handler = t.cast(
+            "signal.Handlers", signal.signal(signal.SIGALRM, _handle_timeout),
+        )
+        signal.setitimer(signal.ITIMER_REAL, self._seconds)
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
+        """Cancel the alarm timer and restore the previous handler."""
+        if self._seconds > 0:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            if self._original_handler is not None:
+                signal.signal(signal.SIGALRM, self._original_handler)
 
 
 def run_code(
