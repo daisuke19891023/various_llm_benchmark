@@ -35,13 +35,26 @@ def _prompt_template() -> PromptTemplate:
 
 def _client() -> GeminiLLMClient:
     client = genai.Client(api_key=settings.gemini_api_key.get_secret_value())
-    return GeminiLLMClient(client, settings.gemini_model, temperature=settings.default_temperature)
+    return GeminiLLMClient(
+        client,
+        settings.gemini_model,
+        temperature=settings.default_temperature,
+        thinking_level=settings.gemini_thinking_level,
+    )
 
 
 @gemini_app.command("complete")
-def gemini_complete(prompt: str, model: str | None = typer.Option(None, help="モデル名を上書きします。")) -> None:
+def gemini_complete(
+    prompt: str,
+    model: str | None = typer.Option(None, help="モデル名を上書きします。"),
+    thinking_level: str | None = typer.Option(None, help="thinking level を指定します。"),
+) -> None:
     """Generate a single-turn response with Gemini."""
-    response = _client().generate(_prompt_template().to_prompt_text(prompt), model=model)
+    response = _client().generate(
+        _prompt_template().to_prompt_text(prompt),
+        model=model,
+        thinking_level=thinking_level,
+    )
     typer.echo(response.content)
 
 
@@ -50,6 +63,7 @@ def gemini_chat(
     prompt: str,
     history: list[str] | None = HISTORY_OPTION,
     model: str | None = typer.Option(None, help="モデル名を上書きします。"),
+    thinking_level: str | None = typer.Option(None, help="thinking level を指定します。"),
 ) -> None:
     """Generate a chat response with optional history."""
     messages = build_messages(prompt, history or [])
@@ -57,6 +71,7 @@ def gemini_chat(
         messages,
         model=model,
         system_instruction=_prompt_template().system,
+        thinking_level=thinking_level,
     )
     typer.echo(response.content)
 
@@ -66,6 +81,7 @@ def gemini_vision(
     prompt: str,
     image_path: Path = IMAGE_ARGUMENT,
     model: str | None = typer.Option(None, help="モデル名を上書きします。"),
+    thinking_level: str | None = typer.Option(None, help="thinking level を指定します。"),
 ) -> None:
     """Analyze an image with a Gemini model."""
     resolved_path = Path(image_path)
@@ -75,5 +91,6 @@ def gemini_vision(
         image_input,
         model=model,
         system_prompt=_prompt_template().system,
+        thinking_level=thinking_level,
     )
     typer.echo(response.content)

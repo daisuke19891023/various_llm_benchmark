@@ -32,6 +32,29 @@ def test_generate_calls_gemini(mocker: MockerFixture) -> None:
     assert response.raw == {"model": "gemini-pro"}
 
 
+def test_generate_applies_thinking_level(mocker: MockerFixture) -> None:
+    """Thinking level should be passed through when provided."""
+    mock_response = SimpleNamespace(text="thought", model="gemini-pro")
+    mock_response.model_dump = mocker.Mock(return_value={"model": "gemini-pro"})
+
+    mock_models = mocker.Mock()
+    mock_models.generate_content.return_value = mock_response
+
+    mock_client = mocker.Mock()
+    mock_client.models = mock_models
+
+    client = GeminiLLMClient(mock_client, "gemini-3.0-pro", temperature=0.2, thinking_level="base")
+    response = client.generate("hi", thinking_level="high")
+
+    mock_models.generate_content.assert_called_once_with(
+        model="gemini-3.0-pro",
+        contents="hi",
+        config={"temperature": 0.2, "thinking": {"type": "high"}},
+    )
+    assert response.content == "thought"
+    assert response.model == "gemini-pro"
+
+
 def test_chat_sends_history(mocker: MockerFixture) -> None:
     """Gemini chat should forward history and return content."""
     mock_response = SimpleNamespace(content={"parts": ["answer"]}, model="gemini-light")

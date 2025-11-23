@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     )
     gemini_model: str = Field(default="gemini-3.0-pro", validation_alias="GEMINI_MODEL")
     gemini_light_model: str = Field(default="gemini-2.5-flash", validation_alias="GEMINI_LIGHT_MODEL")
+    gemini_thinking_level: str | None = Field(
+        default=None, validation_alias="GEMINI_THINKING_LEVEL",
+    )
     dspy_model: str = Field(default="gpt-5.1", validation_alias="DSPY_MODEL")
     dspy_light_model: str = Field(default="gpt-5.1-mini", validation_alias="DSPY_LIGHT_MODEL")
     default_temperature: float = Field(default=0.7, validation_alias="DEFAULT_TEMPERATURE")

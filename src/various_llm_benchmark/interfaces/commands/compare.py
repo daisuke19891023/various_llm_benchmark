@@ -123,7 +123,12 @@ def _anthropic_client() -> AnthropicLLMClient:
 
 def _gemini_client() -> GeminiLLMClient:
     client = genai.Client(api_key=settings.gemini_api_key.get_secret_value())
-    return GeminiLLMClient(client, settings.gemini_model, temperature=settings.default_temperature)
+    return GeminiLLMClient(
+        client,
+        settings.gemini_model,
+        temperature=settings.default_temperature,
+        thinking_level=settings.gemini_thinking_level,
+    )
 
 
 CLIENT_FACTORIES: dict[str, Callable[[], LLMClient]] = {

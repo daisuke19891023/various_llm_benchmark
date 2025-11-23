@@ -13,26 +13,41 @@ if TYPE_CHECKING:
 class GeminiLLMClient(LLMClient):
     """Adapter for Google Gemini API."""
 
-    def __init__(self, client: Client, default_model: str, *, temperature: float = 0.7) -> None:
+    def __init__(
+        self,
+        client: Client,
+        default_model: str,
+        *,
+        temperature: float = 0.7,
+        thinking_level: str | None = None,
+    ) -> None:
         """Create a Gemini client wrapper with defaults."""
         self._client = client
         self._default_model = default_model
         self._temperature = temperature
+        self._thinking_level = thinking_level
 
-    def generate(self, prompt: str, *, model: str | None = None) -> LLMResponse:
+    def generate(
+        self, prompt: str, *, model: str | None = None, thinking_level: str | None = None,
+    ) -> LLMResponse:
         """Generate a completion without history."""
         models_client = cast("Any", self._client.models)
         response: Any = models_client.generate_content(
             model=model or self._default_model,
             contents=prompt,
-            config={"temperature": self._temperature},
+            config=_build_config(self._temperature, self._thinking_level, thinking_level),
         )
         content = _extract_text(response)
         model_name = _extract_model(response, model or self._default_model)
         return LLMResponse(content=content, model=model_name, raw=_dump_raw(response))
 
     def chat(
-        self, messages: list[ChatMessage], *, model: str | None = None, system_instruction: str | None = None,
+        self,
+        messages: list[ChatMessage],
+        *,
+        model: str | None = None,
+        system_instruction: str | None = None,
+        thinking_level: str | None = None,
     ) -> LLMResponse:
         """Generate a completion using chat messages."""
         system_prompt, chat_messages = _extract_system_instruction(messages, system_instruction)
@@ -43,7 +58,7 @@ class GeminiLLMClient(LLMClient):
         request_kwargs: dict[str, object] = {
             "model": model or self._default_model,
             "contents": gemini_messages,
-            "config": {"temperature": self._temperature},
+            "config": _build_config(self._temperature, self._thinking_level, thinking_level),
         }
         if system_prompt:
             request_kwargs["system_instruction"] = system_prompt
@@ -60,6 +75,7 @@ class GeminiLLMClient(LLMClient):
         *,
         model: str | None = None,
         system_prompt: str | None = None,
+        thinking_level: str | None = None,
     ) -> LLMResponse:
         """Generate a response that includes image context."""
         models_client = cast("Any", self._client.models)
@@ -79,7 +95,7 @@ class GeminiLLMClient(LLMClient):
                     ],
                 },
             ],
-            "config": {"temperature": self._temperature},
+            "config": _build_config(self._temperature, self._thinking_level, thinking_level),
         }
         if system_prompt:
             request_kwargs["system_instruction"] = system_prompt
@@ -88,6 +104,16 @@ class GeminiLLMClient(LLMClient):
         content = _extract_text(response)
         model_name = _extract_model(response, model or self._default_model)
         return LLMResponse(content=content, model=model_name, raw=_dump_raw(response))
+
+
+def _build_config(
+    temperature: float, default_thinking_level: str | None, override_thinking_level: str | None,
+) -> dict[str, object]:
+    config: dict[str, object] = {"temperature": temperature}
+    thinking_level = override_thinking_level or default_thinking_level
+    if thinking_level:
+        config["thinking"] = {"type": thinking_level}
+    return config
 
 
 def _to_gemini_message(message: ChatMessage) -> dict[str, object]:
