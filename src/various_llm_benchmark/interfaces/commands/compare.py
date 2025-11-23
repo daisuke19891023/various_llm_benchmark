@@ -27,6 +27,7 @@ from various_llm_benchmark.interfaces.runner import (
 from various_llm_benchmark.llm.providers.anthropic.client import AnthropicLLMClient
 from various_llm_benchmark.llm.providers.gemini.client import GeminiLLMClient
 from various_llm_benchmark.llm.providers.openai.client import OpenAILLMClient
+from various_llm_benchmark.logger import BaseComponent
 from various_llm_benchmark.models import ChatMessage, LLMResponse, ToolCall
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
 from various_llm_benchmark.settings import settings
@@ -167,7 +168,7 @@ CLIENT_FACTORIES: dict[str, Callable[[], LLMClient]] = {
 }
 
 
-class CompareService:
+class CompareService(BaseComponent):
     """Orchestrates chat calls across providers."""
 
     def __init__(
@@ -192,6 +193,11 @@ class CompareService:
         hooks: TaskHooks | None = None,
     ) -> list[ComparisonResult]:
         """Execute chat requests for all targets and collect results asynchronously."""
+        self.log_start(
+            "compare_run_async",
+            target_count=len(self._targets),
+            history_length=len(self._history),
+        )
         runner: AsyncJobRunner[ComparisonResult] = AsyncJobRunner(
             concurrency=concurrency,
             max_retries=max_retries,
@@ -236,6 +242,7 @@ class CompareService:
 
             results.append(task_result.result)
 
+        self.log_end("compare_run_async", result_count=len(results))
         return results
 
     def run(
@@ -293,22 +300,27 @@ class CompareService:
         model_name: str,
         factory: Callable[[], LLMClient],
     ) -> LLMResponse:
+        self.log_start("call_provider", provider=provider_key, model=model_name)
         client = factory()
         if provider_key == "gemini":
             gemini_client = cast("GeminiLLMClient", client)
             messages = list(self._history)
             messages.append(ChatMessage(role="user", content=self._prompt))
             template = _prompt_template(provider_key)
-            return gemini_client.chat(
+            response = gemini_client.chat(
                 messages,
                 model=model_name,
                 system_instruction=template.system,
             )
+            self.log_end("call_provider", provider=provider_key, model=model_name)
+            return response
 
         template = _prompt_template(provider_key)
         messages = template.to_messages(self._prompt, self._history)
         typed_client: LLMClient = client
-        return typed_client.chat(messages, model=model_name)
+        response = typed_client.chat(messages, model=model_name)
+        self.log_end("call_provider", provider=provider_key, model=model_name)
+        return response
 
 
 def _short_error(message: str) -> str:

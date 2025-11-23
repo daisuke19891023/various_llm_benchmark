@@ -5,6 +5,7 @@ from time import perf_counter
 from typing import TYPE_CHECKING, Any, cast
 
 from various_llm_benchmark.llm.protocol import LLMClient
+from various_llm_benchmark.logger import BaseComponent
 from various_llm_benchmark.models import (
     ChatMessage,
     ImageInput,
@@ -16,7 +17,7 @@ if TYPE_CHECKING:
     from google.genai import Client
 
 
-class GeminiLLMClient(LLMClient):
+class GeminiLLMClient(LLMClient, BaseComponent):
     """Adapter for Google Gemini API."""
 
     def __init__(
@@ -37,24 +38,30 @@ class GeminiLLMClient(LLMClient):
         self, prompt: str, *, model: str | None = None, thinking_level: str | None = None,
     ) -> LLMResponse:
         """Generate a completion without history."""
+        resolved_model = model or self._default_model
+        self.log_start("gemini_generate", model=resolved_model)
+        self.log_io(direction="input", prompt=prompt)
         models_client = cast("Any", self._client.models)
         start = perf_counter()
         response: Any = models_client.generate_content(
-            model=model or self._default_model,
+            model=resolved_model,
             contents=prompt,
             config=_build_config(self._temperature, self._thinking_level, thinking_level),
         )
         elapsed_seconds = perf_counter() - start
         content = _extract_text(response)
-        model_name = _extract_model(response, model or self._default_model)
+        model_name = _extract_model(response, resolved_model)
         raw_response = _dump_raw(response)
-        return LLMResponse(
+        result = LLMResponse(
             content=content,
             model=model_name,
             raw=raw_response,
             elapsed_seconds=elapsed_seconds,
             tool_calls=normalize_tool_calls(raw_response),
         )
+        self.log_io(direction="output", model=model_name, content=content)
+        self.log_end("gemini_generate", elapsed_seconds=elapsed_seconds)
+        return result
 
     def chat(
         self,
@@ -65,13 +72,20 @@ class GeminiLLMClient(LLMClient):
         thinking_level: str | None = None,
     ) -> LLMResponse:
         """Generate a completion using chat messages."""
+        resolved_model = model or self._default_model
         system_prompt, chat_messages = _extract_system_instruction(messages, system_instruction)
+        self.log_start(
+            "gemini_chat",
+            model=resolved_model,
+            message_count=len(chat_messages),
+            has_system=bool(system_prompt),
+        )
         gemini_messages: list[dict[str, object]] = [
             _to_gemini_message(message) for message in chat_messages
         ]
         models_client = cast("Any", self._client.models)
         request_kwargs: dict[str, object] = {
-            "model": model or self._default_model,
+            "model": resolved_model,
             "contents": gemini_messages,
             "config": _build_config(self._temperature, self._thinking_level, thinking_level),
         }
@@ -82,15 +96,18 @@ class GeminiLLMClient(LLMClient):
         response: Any = models_client.generate_content(**request_kwargs)
         elapsed_seconds = perf_counter() - start
         content = _extract_text(response)
-        model_name = _extract_model(response, model or self._default_model)
+        model_name = _extract_model(response, resolved_model)
         raw_response = _dump_raw(response)
-        return LLMResponse(
+        result = LLMResponse(
             content=content,
             model=model_name,
             raw=raw_response,
             elapsed_seconds=elapsed_seconds,
             tool_calls=normalize_tool_calls(raw_response),
         )
+        self.log_io(direction="output", model=model_name, content=content)
+        self.log_end("gemini_chat", elapsed_seconds=elapsed_seconds)
+        return result
 
     def vision(
         self,
@@ -102,9 +119,16 @@ class GeminiLLMClient(LLMClient):
         thinking_level: str | None = None,
     ) -> LLMResponse:
         """Generate a response that includes image context."""
+        resolved_model = model or self._default_model
+        self.log_start(
+            "gemini_vision",
+            model=resolved_model,
+            image_media_type=image.media_type,
+        )
+        self.log_io(direction="input", prompt=prompt, image_bytes=len(image.data))
         models_client = cast("Any", self._client.models)
         request_kwargs: dict[str, object] = {
-            "model": model or self._default_model,
+            "model": resolved_model,
             "contents": [
                 {
                     "role": "user",
@@ -128,15 +152,18 @@ class GeminiLLMClient(LLMClient):
         response: Any = models_client.generate_content(**request_kwargs)
         elapsed_seconds = perf_counter() - start
         content = _extract_text(response)
-        model_name = _extract_model(response, model or self._default_model)
+        model_name = _extract_model(response, resolved_model)
         raw_response = _dump_raw(response)
-        return LLMResponse(
+        result = LLMResponse(
             content=content,
             model=model_name,
             raw=raw_response,
             elapsed_seconds=elapsed_seconds,
             tool_calls=normalize_tool_calls(raw_response),
         )
+        self.log_io(direction="output", model=model_name, content=content)
+        self.log_end("gemini_vision", elapsed_seconds=elapsed_seconds)
+        return result
 
 
 def _build_config(

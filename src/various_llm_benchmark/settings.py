@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -22,6 +24,12 @@ class Settings(BaseSettings):
     gemini_thinking_level: str | None = Field(
         default=None, validation_alias="GEMINI_THINKING_LEVEL",
     )
+    log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
+    log_destination: Literal["stdout", "file", "both"] = Field(
+        default="stdout", validation_alias="LOG_DESTINATION",
+    )
+    log_file_path: str = Field(default="logs/app.log", validation_alias="LOG_FILE_PATH")
+    log_verbose: bool = Field(default=False, validation_alias="LOG_VERBOSE")
     pydantic_ai_api_key: SecretStr = Field(
         default=SecretStr(""), validation_alias="PYDANTIC_AI_API_KEY",
     )

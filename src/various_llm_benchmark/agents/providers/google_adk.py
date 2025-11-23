@@ -12,6 +12,7 @@ from google.adk.events.event import Event
 from google.adk.runners import InMemoryRunner
 from google.genai import types
 
+from various_llm_benchmark.logger import BaseComponent
 from various_llm_benchmark.models import (
     ChatMessage,
     ImageInput,
@@ -26,7 +27,7 @@ RunnerFactory = Callable[[Agent], object]
 RunFunction = Callable[[Any, str, types.Content, RunConfig], Iterable[Event]]
 
 
-class GoogleADKProvider:
+class GoogleADKProvider(BaseComponent):
     """Wrapper around Google ADK for simple text, chat, and vision calls."""
 
     def __init__(
@@ -53,15 +54,21 @@ class GoogleADKProvider:
 
     def complete(self, prompt: str) -> LLMResponse:
         """Generate a single-turn response."""
+        self.log_start("google_adk_complete", model=self._model)
+        self.log_io(direction="input", prompt=prompt)
         agent = self._build_agent()
         runner = cast("Any", self._runner_factory(agent))
         session = self._create_session(runner)
         new_message = self._to_content(ChatMessage(role="user", content=prompt))
         events, elapsed_seconds = self._run(runner, session.id, new_message)
-        return self._to_response(events, elapsed_seconds)
+        result = self._to_response(events, elapsed_seconds)
+        self.log_io(direction="output", model=result.model, content=result.content)
+        self.log_end("google_adk_complete", elapsed_seconds=elapsed_seconds)
+        return result
 
     def chat(self, messages: list[ChatMessage]) -> LLMResponse:
         """Generate a response with chat-style history."""
+        self.log_start("google_adk_chat", model=self._model, message_count=len(messages))
         agent = self._build_agent()
         runner = cast("Any", self._runner_factory(agent))
         session = self._create_session(runner)
@@ -72,10 +79,15 @@ class GoogleADKProvider:
         latest = messages[-1]
         new_message = self._to_content(latest)
         events, elapsed_seconds = self._run(runner, session.id, new_message)
-        return self._to_response(events, elapsed_seconds)
+        result = self._to_response(events, elapsed_seconds)
+        self.log_io(direction="output", model=result.model, content=result.content)
+        self.log_end("google_adk_chat", elapsed_seconds=elapsed_seconds)
+        return result
 
     def vision(self, prompt: str, image: ImageInput) -> LLMResponse:
         """Generate a response that includes image input."""
+        self.log_start("google_adk_vision", model=self._model, image_media_type=image.media_type)
+        self.log_io(direction="input", prompt=prompt, image_bytes=len(image.data))
         agent = self._build_agent()
         runner = cast("Any", self._runner_factory(agent))
         session = self._create_session(runner)
@@ -85,7 +97,10 @@ class GoogleADKProvider:
         ]
         new_message = types.Content(role="user", parts=parts)
         events, elapsed_seconds = self._run(runner, session.id, new_message)
-        return self._to_response(events, elapsed_seconds)
+        result = self._to_response(events, elapsed_seconds)
+        self.log_io(direction="output", model=result.model, content=result.content)
+        self.log_end("google_adk_vision", elapsed_seconds=elapsed_seconds)
+        return result
 
     def _build_agent(self) -> Agent:
         return Agent(

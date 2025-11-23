@@ -9,6 +9,7 @@ from agents.items import ItemHelpers, TResponseInputItem
 from agents.model_settings import ModelSettings
 from agents.run import Runner
 
+from various_llm_benchmark.logger import BaseComponent
 from various_llm_benchmark.models import (
     ChatMessage,
     ImageInput,
@@ -30,7 +31,7 @@ class AgentRunFunction(Protocol):
         ...
 
 
-class OpenAIAgentsProvider:
+class OpenAIAgentsProvider(BaseComponent):
     """Wrapper around the OpenAI Agents SDK for simple completions and chats."""
 
     def __init__(
@@ -53,19 +54,36 @@ class OpenAIAgentsProvider:
 
     def complete(self, prompt: str) -> LLMResponse:
         """Generate a single-turn response via Agents SDK."""
+        self.log_start("openai_agents_complete", model=self._model)
+        self.log_io(direction="input", prompt=prompt)
         agent = self._build_agent()
         run_result, elapsed_seconds = self._run(agent, prompt)
-        return self._to_response(run_result, elapsed_seconds)
+        response = self._to_response(run_result, elapsed_seconds)
+        self.log_io(direction="output", model=response.model, content=response.content)
+        self.log_end("openai_agents_complete", elapsed_seconds=elapsed_seconds)
+        return response
 
     def chat(self, messages: list[ChatMessage]) -> LLMResponse:
         """Generate a response using chat-style history."""
+        self.log_start("openai_agents_chat", model=self._model, message_count=len(messages))
+        if messages:
+            self.log_io(
+                direction="input",
+                message_count=len(messages),
+                last_user_message=messages[-1].content,
+            )
         agent = self._build_agent()
         run_input: list[TResponseInputItem] = [self._to_agent_message(message) for message in messages]
         run_result, elapsed_seconds = self._run(agent, run_input)
-        return self._to_response(run_result, elapsed_seconds)
+        response = self._to_response(run_result, elapsed_seconds)
+        self.log_io(direction="output", model=response.model, content=response.content)
+        self.log_end("openai_agents_chat", elapsed_seconds=elapsed_seconds)
+        return response
 
     def vision(self, prompt: str, image: ImageInput) -> LLMResponse:
         """Generate a response that includes image content."""
+        self.log_start("openai_agents_vision", model=self._model, image_media_type=image.media_type)
+        self.log_io(direction="input", prompt=prompt, image_bytes=len(image.data))
         agent = self._build_agent()
         run_input: list[TResponseInputItem] = [
             cast(
@@ -80,7 +98,10 @@ class OpenAIAgentsProvider:
             ),
         ]
         run_result, elapsed_seconds = self._run(agent, run_input)
-        return self._to_response(run_result, elapsed_seconds)
+        response = self._to_response(run_result, elapsed_seconds)
+        self.log_io(direction="output", model=response.model, content=response.content)
+        self.log_end("openai_agents_vision", elapsed_seconds=elapsed_seconds)
+        return response
 
     def _build_agent(self) -> Agent:
         agent_tools = to_agents_sdk_tools_payload(self._tools) if self._tools else []

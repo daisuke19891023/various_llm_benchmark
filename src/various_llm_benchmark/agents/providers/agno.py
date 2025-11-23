@@ -11,6 +11,7 @@ from agno.models.google import Gemini
 from agno.models.message import Message
 from agno.models.openai import OpenAIChat
 
+from various_llm_benchmark.logger import BaseComponent
 from various_llm_benchmark.models import (
     ChatMessage,
     ImageInput,
@@ -47,7 +48,7 @@ class RunResult(Protocol):
 ProviderName = Literal["openai", "anthropic", "gemini"]
 
 
-class AgnoAgentProvider:
+class AgnoAgentProvider(BaseComponent):
     """Run Agno agents with OpenAI or Anthropic backends."""
 
     def __init__(
@@ -76,18 +77,38 @@ class AgnoAgentProvider:
 
     def complete(self, prompt: str, *, provider: ProviderName, model: str | None = None) -> LLMResponse:
         """Generate a single-turn response."""
+        self.log_start("agno_complete", provider=provider, model=model or self._model_name(provider))
+        self.log_io(direction="input", prompt=prompt)
         agent, model_obj = self._build_agent(provider, model)
         run_output, elapsed_seconds = self._run(agent, prompt)
-        return self._build_response(run_output, model_obj, elapsed_seconds)
+        response = self._build_response(run_output, model_obj, elapsed_seconds)
+        self.log_io(direction="output", model=response.model, content=response.content)
+        self.log_end("agno_complete", elapsed_seconds=elapsed_seconds)
+        return response
 
     def chat(
         self, messages: list[ChatMessage], *, provider: ProviderName, model: str | None = None,
     ) -> LLMResponse:
         """Generate a response using message history."""
+        self.log_start(
+            "agno_chat",
+            provider=provider,
+            model=model or self._model_name(provider),
+            message_count=len(messages),
+        )
+        if messages:
+            self.log_io(
+                direction="input",
+                message_count=len(messages),
+                last_user_message=messages[-1].content,
+            )
         agent, model_obj = self._build_agent(provider, model)
         agno_messages = [self._to_agno_message(message) for message in messages]
         run_output, elapsed_seconds = self._run(agent, agno_messages)
-        return self._build_response(run_output, model_obj, elapsed_seconds)
+        response = self._build_response(run_output, model_obj, elapsed_seconds)
+        self.log_io(direction="output", model=response.model, content=response.content)
+        self.log_end("agno_chat", elapsed_seconds=elapsed_seconds)
+        return response
 
     def vision(
         self,
@@ -98,6 +119,13 @@ class AgnoAgentProvider:
         model: str | None = None,
     ) -> LLMResponse:
         """Generate a response using an image input."""
+        self.log_start(
+            "agno_vision",
+            provider=provider,
+            model=model or self._model_name(provider),
+            image_media_type=image.media_type,
+        )
+        self.log_io(direction="input", prompt=prompt, image_bytes=len(image.data))
         agent, model_obj = self._build_agent(provider, model)
         run_input = [
             {
@@ -109,7 +137,17 @@ class AgnoAgentProvider:
             },
         ]
         run_output, elapsed_seconds = self._run(agent, run_input)
-        return self._build_response(run_output, model_obj, elapsed_seconds)
+        response = self._build_response(run_output, model_obj, elapsed_seconds)
+        self.log_io(direction="output", model=response.model, content=response.content)
+        self.log_end("agno_vision", elapsed_seconds=elapsed_seconds)
+        return response
+
+    def _model_name(self, provider: ProviderName) -> str:
+        if provider == "openai":
+            return self._openai_model
+        if provider == "anthropic":
+            return self._anthropic_model
+        return self._gemini_model
 
     def _build_agent(
         self, provider: ProviderName, model: str | None,

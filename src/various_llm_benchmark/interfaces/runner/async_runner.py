@@ -5,6 +5,8 @@ import inspect
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
+from various_llm_benchmark.logger import BaseComponent
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
@@ -25,7 +27,7 @@ class TaskResult[T]:
         return self.error is None and not self.cancelled
 
 
-class TaskHooks:
+class TaskHooks(BaseComponent):
     """Lifecycle callbacks for task execution."""
 
     def on_start(self, name: str, attempt: int) -> None:
@@ -44,7 +46,7 @@ class TaskHooks:
         """Call when a task is cancelled."""
 
 
-class AsyncJobRunner[T]:
+class AsyncJobRunner[T](BaseComponent):
     """Asyncio based job runner with retry and cancellation support."""
 
     def __init__(
@@ -85,9 +87,16 @@ class AsyncJobRunner[T]:
 
         task_name = name or getattr(func, "__name__", "task")
         self._tasks.append((task_name, _wrapped))
+        self.log_io(direction="input", action="add_task", task_name=task_name)
 
     async def run(self) -> list[TaskResult[T]]:
         """Execute all registered tasks respecting concurrency and retries."""
+        self.log_start(
+            "run_tasks",
+            task_count=len(self._tasks),
+            concurrency=self._concurrency,
+            max_retries=self._max_retries,
+        )
         queue: asyncio.Queue[tuple[int, str, Callable[[], Awaitable[T]], int]] = asyncio.Queue()
         results: list[TaskResult[T] | None] = [None for _ in self._tasks]
 
@@ -106,8 +115,9 @@ class AsyncJobRunner[T]:
             for worker in workers:
                 worker.cancel()
             await asyncio.gather(*workers, return_exceptions=True)
-
-        return [result for result in results if result is not None]
+        finished_results = [result for result in results if result is not None]
+        self.log_end("run_tasks", completed=len(finished_results))
+        return finished_results
 
     def request_cancel(self) -> None:
         """Signal cancellation for remaining tasks."""
@@ -126,6 +136,7 @@ class AsyncJobRunner[T]:
 
             current_attempt = attempt + 1
             self._hooks.on_start(task_name, current_attempt)
+            self.log_start("task_attempt", name=task_name, attempt=current_attempt)
             if self._cancel_event.is_set():
                 results[task_id] = TaskResult(
                     name=task_name,
@@ -133,6 +144,7 @@ class AsyncJobRunner[T]:
                     cancelled=True,
                 )
                 self._hooks.on_cancel(task_name, current_attempt)
+                self.log_end("task_cancelled", name=task_name, attempt=current_attempt)
                 queue.task_done()
                 continue
 
@@ -150,6 +162,12 @@ class AsyncJobRunner[T]:
             except Exception as exc:
                 if attempt < self._max_retries and not self._cancel_event.is_set():
                     self._hooks.on_retry(task_name, current_attempt, exc)
+                    self.logger.warning(
+                        "task_retry",
+                        name=task_name,
+                        attempt=current_attempt,
+                        error=str(exc),
+                    )
                     await queue.put((task_id, task_name, task_callable, attempt + 1))
                 else:
                     results[task_id] = TaskResult(
@@ -158,6 +176,12 @@ class AsyncJobRunner[T]:
                         attempts=current_attempt,
                     )
                     self._hooks.on_failure(task_name, current_attempt, exc)
+                    self.logger.error(
+                        "task_failed",
+                        name=task_name,
+                        attempt=current_attempt,
+                        error=str(exc),
+                    )
             else:
                 results[task_id] = TaskResult(
                     name=task_name,
@@ -165,5 +189,6 @@ class AsyncJobRunner[T]:
                     attempts=current_attempt,
                 )
                 self._hooks.on_success(task_name, current_attempt)
+                self.log_end("task_success", name=task_name, attempt=current_attempt)
             finally:
                 queue.task_done()

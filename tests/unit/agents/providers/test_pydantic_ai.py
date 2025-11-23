@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, TypedDict, cast
+from unittest.mock import MagicMock, call
 
 import various_llm_benchmark.agents.providers.pydantic_ai as pydantic_ai_module
 
@@ -226,3 +227,33 @@ def test_tools_are_wrapped_and_callable_with_context() -> None:
     assert isinstance(tool_list[0], Tool)
     assert tool_calls[0]["action"] == "ping"
     assert tool_calls[0]["ctx"]
+
+
+def test_complete_logs_structured_events(monkeypatch: Any) -> None:
+    """Pydantic AI provider should emit start, IO, and end logs."""
+    times = iter([1.0, 2.5])
+    monkeypatch.setattr(pydantic_ai_module, "perf_counter", lambda: next(times))
+
+    logger = MagicMock()
+
+    def agent_factory(**kwargs: object) -> StubAgent:
+        return StubAgent(**kwargs)
+
+    provider = PydanticAIAgentProvider(
+        model="gpt-mini",
+        system_prompt="sys",
+        temperature=0.5,
+        agent_factory=agent_factory,
+    )
+    provider.logger = logger
+
+    provider.complete("hello")
+
+    expected_calls = [
+        call("start", action="pydantic_ai_complete", model="gpt-mini"),
+        call("io", direction="input", prompt="hello"),
+        call("io", direction="output", model="gpt-mini", content="ok"),
+        call("end", action="pydantic_ai_complete", elapsed_seconds=1.5),
+    ]
+    for expected in expected_calls:
+        assert expected in logger.info.call_args_list

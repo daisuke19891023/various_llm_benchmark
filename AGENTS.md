@@ -64,6 +64,10 @@ Configuration contents (Ruff/Pyright/Nox) live in files; do not duplicate them h
 - Favor the standard library; avoid adding dependencies casually.
 - Remove temporary debug code before committing.
 - Use clear, typed exceptions; never allow silent failures.
+- **Logging:** use `structlog` via `various_llm_benchmark.logger`. New components should subclass
+  `BaseComponent` to access a bound logger and helper methods (`log_start`, `log_end`, `log_io`).
+  Logging destinations/level/verbosity come from `Settings` (see `.env.example`); do not configure
+  logging ad-hoc in modules.
 
 ## 6. Dependency & Task Routines
 - `uv`: `uv add`, `uv add --dev`, `uv sync`, `uv run <cmd>`.
