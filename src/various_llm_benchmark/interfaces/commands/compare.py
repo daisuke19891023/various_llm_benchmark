@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, cast
 
 import typer
 from anthropic import Anthropic
-from google import genai
+from google.genai import Client
 from openai import OpenAI
 from pydantic import BaseModel, Field
 
@@ -122,7 +122,7 @@ def _anthropic_client() -> AnthropicLLMClient:
 
 
 def _gemini_client() -> GeminiLLMClient:
-    client = genai.Client(api_key=settings.gemini_api_key.get_secret_value())
+    client = Client(api_key=settings.gemini_api_key.get_secret_value())
     return GeminiLLMClient(
         client,
         settings.gemini_model,

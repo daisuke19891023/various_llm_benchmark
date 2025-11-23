@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import typer
-from google import genai
+from google.genai import Client
 
 from various_llm_benchmark.interfaces.commands.common import build_messages
 from various_llm_benchmark.media.images import read_image_file
@@ -34,7 +34,7 @@ def _prompt_template() -> PromptTemplate:
 
 
 def _client() -> GeminiLLMClient:
-    client = genai.Client(api_key=settings.gemini_api_key.get_secret_value())
+    client = Client(api_key=settings.gemini_api_key.get_secret_value())
     return GeminiLLMClient(
         client,
         settings.gemini_model,

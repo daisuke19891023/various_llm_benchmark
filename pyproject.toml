@@ -131,7 +131,6 @@ exclude = [
     "build",
     "dist",
 ]
-stubPath = "typings"
 venvPath = "."
 venv = ".venv"
 typeCheckingMode = "strict"

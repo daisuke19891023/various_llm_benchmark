@@ -9,7 +9,7 @@ import time
 from typing import TYPE_CHECKING, Any, Protocol, Self, cast
 
 from anthropic import Anthropic
-from google import genai
+from google.genai import Client
 from openai import APIConnectionError, APITimeoutError, OpenAI, RateLimitError
 from pydantic import BaseModel, Field
 from psycopg import Error as PsycopgError, sql
@@ -141,7 +141,7 @@ def generate_embedding(
     max_retries: int = 2,
     openai_client: SupportsOpenAIClient | None = None,
     anthropic_client: Anthropic | None = None,
-    gemini_client: genai.Client | None = None,
+    gemini_client: Client | None = None,
 ) -> list[float]:
     """Generate an embedding vector using the requested provider with retries."""
     backoff: float = 0.2
@@ -368,10 +368,10 @@ def _generate_anthropic_embedding(
 
 
 def _generate_gemini_embedding(
-    text: str, *, model: str | None, _timeout: float, client: genai.Client | None,
+    text: str, *, model: str | None, _timeout: float, client: Client | None,
 ) -> list[float]:
     embedding_model = model or settings.embedding_model
-    genai_client = client or genai.Client(api_key=settings.gemini_api_key.get_secret_value())
+    genai_client = client or Client(api_key=settings.gemini_api_key.get_secret_value())
     response = genai_client.models.embed_content(
         model=embedding_model,
         contents=[text],

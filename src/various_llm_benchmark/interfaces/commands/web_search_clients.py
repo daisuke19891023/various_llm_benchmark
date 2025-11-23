@@ -6,7 +6,7 @@ from functools import lru_cache, partial
 from typing import TYPE_CHECKING, Literal, Protocol, cast
 
 from anthropic import Anthropic
-from google import genai
+from google.genai import Client
 from openai import OpenAI
 
 from various_llm_benchmark.llm.tools import ToolSelector
@@ -113,7 +113,7 @@ def build_anthropic_web_search_tool(use_light_model: bool = False) -> AnthropicW
 @lru_cache(maxsize=2)
 def build_gemini_web_search_tool(use_light_model: bool = False) -> GeminiWebSearchTool:
     """Return a cached Gemini web search caller."""
-    client = cast("SupportsSearchModels", genai.Client(api_key=settings.gemini_api_key.get_secret_value()))
+    client = cast("SupportsSearchModels", Client(api_key=settings.gemini_api_key.get_secret_value()))
     default_model = settings.gemini_light_model if use_light_model else settings.gemini_model
     return GeminiWebSearchTool(
         client,
