@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import cast
+import time
 
 import pytest
 
@@ -73,6 +74,29 @@ call_tool("memory/append", role="user", content="not allowed")
     assert result.exit_code == 1
     assert "not allowed" not in result.stdout
     assert "not allowed" in result.stderr
+
+
+def test_executor_converts_system_exit_to_error_result() -> None:
+    """SystemExit should not escape and should surface as an error result."""
+    executor = SafeCodeExecutor()
+
+    result = executor.run("python", "import sys\nsys.exit('stop')")
+
+    assert result.exit_code == 1
+    assert "stop" in result.stderr
+
+
+def test_executor_enforces_timeout() -> None:
+    """Long-running snippets should be interrupted after the configured timeout."""
+    executor = SafeCodeExecutor(timeout_seconds=0.2)
+    start = time.monotonic()
+
+    result = executor.run("python", "while True:\n    pass", timeout_seconds=0.2)
+
+    duration = time.monotonic() - start
+    assert result.exit_code == 1
+    assert "Execution exceeded" in result.stderr
+    assert duration < 2
 
 
 def test_payload_overrides_are_used_for_providers() -> None:
