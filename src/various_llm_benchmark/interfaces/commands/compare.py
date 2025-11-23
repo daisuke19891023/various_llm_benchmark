@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from functools import cache
 from pathlib import Path
@@ -12,6 +13,7 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 
 from various_llm_benchmark.interfaces.commands.common import parse_history
+from various_llm_benchmark.interfaces.runner import AsyncJobRunner, TaskResult
 from various_llm_benchmark.llm.providers.anthropic.client import AnthropicLLMClient
 from various_llm_benchmark.llm.providers.gemini.client import GeminiLLMClient
 from various_llm_benchmark.llm.providers.openai.client import OpenAILLMClient
@@ -53,6 +55,20 @@ OUTPUT_FILE_OPTION: Path | None = typer.Option(
     "-o",
     help="結果をJSON形式で保存するファイルパス。",
     writable=True,
+)
+CONCURRENCY_OPTION: int = typer.Option(
+    3,
+    "--concurrency",
+    "-c",
+    min=1,
+    help="同時に実行するタスク数。",
+)
+RETRY_OPTION: int = typer.Option(
+    0,
+    "--retries",
+    "-r",
+    min=0,
+    help="失敗時に再試行する回数。",
 )
 
 PROVIDER_ALIASES: dict[str, str] = {"claude": "anthropic"}
@@ -134,53 +150,98 @@ class CompareService:
         self._targets = targets
         self._client_factories = client_factories or CLIENT_FACTORIES
 
-    def run(self) -> list[ComparisonResult]:
-        """Execute chat requests for all targets and collect results."""
-        results: list[ComparisonResult] = []
+    async def run_async(
+        self, *, concurrency: int = 3, max_retries: int = 0,
+    ) -> list[ComparisonResult]:
+        """Execute chat requests for all targets and collect results asynchronously."""
+        runner: AsyncJobRunner[ComparisonResult] = AsyncJobRunner(
+            concurrency=concurrency,
+            max_retries=max_retries,
+        )
         for target in self._targets:
-            provider_key = target.normalized_provider
-            model_name = target.model or DEFAULT_MODELS.get(provider_key)
-            if model_name is None:
-                error_message = f"モデルが未設定です: {target.provider}"
-                results.append(
-                    ComparisonResult(provider=target.provider, model="", error=error_message),
-                )
-                continue
+            runner.add_task(self._execute_target, target, name=f"compare-{target.provider}")
 
-            factory = self._client_factories.get(provider_key)
-            if factory is None:
-                error_message = f"未対応のプロバイダーです: {target.provider}"
-                results.append(
-                    ComparisonResult(provider=target.provider, model=model_name, error=error_message),
-                )
-                continue
-
-            try:
-                response = self._call_provider(provider_key, model_name, factory)
+        task_results: list[TaskResult[ComparisonResult]] = await runner.run()
+        results: list[ComparisonResult] = []
+        for task_result, target in zip(task_results, self._targets, strict=False):
+            if task_result.cancelled:
                 results.append(
                     ComparisonResult(
                         provider=target.provider,
-                        model=response.model,
-                        content=response.content,
+                        model=target.model or "",
+                        error="タスクがキャンセルされました",
                     ),
                 )
-            except Exception as exc:
+                continue
+
+            if task_result.error is not None:
                 results.append(
                     ComparisonResult(
                         provider=target.provider,
-                        model=model_name,
-                        error=str(exc),
+                        model=target.model or "",
+                        error=str(task_result.error),
                     ),
                 )
+                continue
+
+            if task_result.result is None:
+                error_message = "結果が設定されていません"
+                results.append(
+                    ComparisonResult(
+                        provider=target.provider,
+                        model=target.model or "",
+                        error=error_message,
+                    ),
+                )
+                continue
+
+            results.append(task_result.result)
+
         return results
 
-    def _call_provider(
+    def run(self, *, concurrency: int = 3, max_retries: int = 0) -> list[ComparisonResult]:
+        """Run comparisons synchronously via :meth:`run_async`."""
+        return asyncio.run(self.run_async(concurrency=concurrency, max_retries=max_retries))
+
+    async def _execute_target(self, target: ComparisonTarget) -> ComparisonResult:
+        provider_key = target.normalized_provider
+        model_name = target.model or DEFAULT_MODELS.get(provider_key)
+        if model_name is None:
+            error_message = f"モデルが未設定です: {target.provider}"
+            raise ValueError(error_message)
+
+        factory = self._client_factories.get(provider_key)
+        if factory is None:
+            error_message = f"未対応のプロバイダーです: {target.provider}"
+            raise ValueError(error_message)
+
+        response = await self._call_provider(provider_key, model_name, factory)
+        return ComparisonResult(
+            provider=target.provider,
+            model=response.model,
+            content=response.content,
+        )
+
+    async def _call_provider(
         self,
         provider_key: str,
         model_name: str,
         factory: Callable[[], LLMClient],
     ) -> LLMResponse:
-        """Call a provider client using the configured strategy."""
+        """Call a provider client using the configured strategy in a worker thread."""
+        return await asyncio.to_thread(
+            self._call_provider_sync,
+            provider_key,
+            model_name,
+            factory,
+        )
+
+    def _call_provider_sync(
+        self,
+        provider_key: str,
+        model_name: str,
+        factory: Callable[[], LLMClient],
+    ) -> LLMResponse:
         client = factory()
         if provider_key == "gemini":
             gemini_client = cast("GeminiLLMClient", client)
@@ -258,12 +319,16 @@ def compare_chat(
     targets: list[str] | None = TARGET_OPTION,
     output_format: str = OUTPUT_FORMAT_OPTION,
     output_file: Path | None = OUTPUT_FILE_OPTION,
+    concurrency: int = CONCURRENCY_OPTION,
+    retries: int = RETRY_OPTION,
 ) -> None:
     """Run the same prompt across providers and compare responses."""
     messages_history = parse_history(history or [])
     parsed_targets = _parse_targets(targets)
     service = CompareService(prompt=prompt, history=messages_history, targets=parsed_targets)
-    results = service.run()
+    results = asyncio.run(
+        service.run_async(concurrency=concurrency, max_retries=retries),
+    )
 
     rendered_output = _render_results(results, output_format)
     typer.echo(rendered_output)
