@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Protocol, Self
 from pydantic import BaseModel, Field
 
 from psycopg import Error as PsycopgError, sql
+from psycopg_pool import PoolTimeout
 
 from various_llm_benchmark.llm.tools.retriever import (
     EmbeddingProvider,
@@ -257,7 +258,7 @@ def _upsert_embeddings(
                             [chunk.id, chunk.content, json.dumps(chunk.metadata), list(embedding)],
                         )
                 connection.commit()
-        except PsycopgError as exc:
+        except (PoolTimeout, PsycopgError) as exc:
             last_error = exc
             if connection is not None:
                 connection.rollback()
