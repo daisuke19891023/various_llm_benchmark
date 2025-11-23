@@ -20,31 +20,47 @@ class AnthropicLLMClient(LLMClient):
         self._default_model = default_model
         self._temperature = temperature
 
-    def generate(self, prompt: str, *, model: str | None = None) -> LLMResponse:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        model: str | None = None,
+        thinking: Mapping[str, object] | None = None,
+    ) -> LLMResponse:
         """Generate a completion without history."""
         messages = cast("list[MessageParam]", [{"role": "user", "content": prompt}])
-        response = self._client.messages.create(
-            model=model or self._default_model,
-            messages=messages,
-            max_tokens=1024,
+        request_kwargs = _build_messages_kwargs(
+            model or self._default_model,
+            messages,
             temperature=self._temperature,
+            thinking=thinking,
         )
+        messages_client = cast("Any", self._client.messages)
+        response = messages_client.create(**request_kwargs)
         content_data = cast("list[Any] | str", response.content)
         content = _extract_text(content_data)
         return LLMResponse(content=content, model=response.model, raw=response.model_dump())
 
-    def chat(self, messages: list[ChatMessage], *, model: str | None = None) -> LLMResponse:
+    def chat(
+        self,
+        messages: list[ChatMessage],
+        *,
+        model: str | None = None,
+        thinking: Mapping[str, object] | None = None,
+    ) -> LLMResponse:
         """Generate a completion using chat messages."""
         anthropic_messages = cast(
             "list[MessageParam]",
             [{"role": msg.role, "content": msg.content} for msg in messages],
         )
-        response = self._client.messages.create(
-            model=model or self._default_model,
-            messages=anthropic_messages,
-            max_tokens=1024,
+        request_kwargs = _build_messages_kwargs(
+            model or self._default_model,
+            anthropic_messages,
             temperature=self._temperature,
+            thinking=thinking,
         )
+        messages_client = cast("Any", self._client.messages)
+        response = messages_client.create(**request_kwargs)
         content_data = cast("list[Any] | str", response.content)
         content = _extract_text(content_data)
         return LLMResponse(content=content, model=response.model, raw=response.model_dump())
@@ -119,3 +135,21 @@ def _extract_text(content: list[Any] | str) -> str:
 def extract_anthropic_text(content: list[Any] | str) -> str:
     """Public wrapper for parsing Anthropic message content."""
     return _extract_text(content)
+
+
+def _build_messages_kwargs(
+    model: str,
+    messages: list[MessageParam],
+    *,
+    temperature: float,
+    thinking: Mapping[str, object] | None = None,
+) -> dict[str, object]:
+    request_kwargs: dict[str, object] = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": 1024,
+        "temperature": temperature,
+    }
+    if thinking is not None:
+        request_kwargs["thinking"] = dict(thinking)
+    return request_kwargs
