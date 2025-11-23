@@ -224,8 +224,15 @@ def test_claude_complete(monkeypatch: pytest.MonkeyPatch) -> None:
     """Claude complete command should print generated content."""
     captured: list[str] = []
 
-    def generate(prompt: str, model: str | None = None) -> LLMResponse:
+    def generate(
+        prompt: str,
+        model: str | None = None,
+        *,
+        thinking: dict[str, object] | None = None,
+    ) -> LLMResponse:
         captured.append(prompt)
+        if thinking is not None:
+            captured.append(str(thinking))
         return LLMResponse(content=f"ok:{prompt}", model=model or "m", raw={"source": "test"})
 
     def fake_client() -> SimpleNamespace:
@@ -233,20 +240,31 @@ def test_claude_complete(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("various_llm_benchmark.interfaces.commands.claude._client", fake_client)
 
-    result = runner.invoke(app, ["claude", "complete", "ping"])
+    result = runner.invoke(
+        app,
+        ["claude", "complete", "ping", "--extended-thinking", "--thinking-tokens", "9000"],
+    )
 
     assert result.exit_code == 0
     assert "ok:" in result.stdout
     assert captured[0].startswith("You are a clear and concise assistant")
     assert captured[0].rstrip().endswith("ping")
+    assert "'budget_tokens': 9000" in captured[1]
 
 
 def test_claude_chat(monkeypatch: pytest.MonkeyPatch) -> None:
     """Claude chat command should include system prompts."""
     recorded_messages: list[list[ChatMessage]] = []
+    recorded_thinking: list[dict[str, object] | None] = []
 
-    def chat(messages: list[ChatMessage], model: str | None = None) -> LLMResponse:
+    def chat(
+        messages: list[ChatMessage],
+        model: str | None = None,
+        *,
+        thinking: dict[str, object] | None = None,
+    ) -> LLMResponse:
         recorded_messages.append(messages)
+        recorded_thinking.append(thinking)
         return LLMResponse(content=str(len(messages)), model=model or "m", raw={"source": "test"})
 
     def fake_client() -> SimpleNamespace:
@@ -254,11 +272,16 @@ def test_claude_chat(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr("various_llm_benchmark.interfaces.commands.claude._client", fake_client)
 
-    result = runner.invoke(app, ["claude", "chat", "hi"], catch_exceptions=False)
+    result = runner.invoke(
+        app,
+        ["claude", "chat", "hi", "--extended-thinking", "--thinking-tokens", "7000"],
+        catch_exceptions=False,
+    )
 
     assert result.exit_code == 0
     assert recorded_messages[0][0].role == "system"
     assert recorded_messages[0][-1].content == "hi"
+    assert recorded_thinking[0] == {"type": "enabled", "budget_tokens": 7000}
     assert result.stdout.strip() == "2"
 
 

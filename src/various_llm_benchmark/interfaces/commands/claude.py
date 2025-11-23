@@ -3,6 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
+
 import typer
 from anthropic import Anthropic
 
@@ -38,10 +39,31 @@ def _client() -> AnthropicLLMClient:
     return AnthropicLLMClient(client, settings.anthropic_model, temperature=settings.default_temperature)
 
 
+def _thinking_config(enabled: bool, budget_tokens: int) -> dict[str, object] | None:
+    if not enabled:
+        return None
+    return {"type": "enabled", "budget_tokens": budget_tokens}
+
+
 @claude_app.command("complete")
-def claude_complete(prompt: str, model: str | None = typer.Option(None, help="モデル名を上書きします.")) -> None:
+def claude_complete(
+    prompt: str,
+    model: str | None = typer.Option(None, help="モデル名を上書きします."),
+    extended_thinking: bool = typer.Option(
+        default=False,
+        help="Claude Extended Thinkingを有効化します。",
+    ),
+    thinking_tokens: int = typer.Option(
+        default=8192,
+        help="Extended Thinkingに割り当てるトークン数。",
+    ),
+) -> None:
     """Generate a single-turn response with Claude."""
-    response = _client().generate(_prompt_template().to_prompt_text(prompt), model=model)
+    response = _client().generate(
+        _prompt_template().to_prompt_text(prompt),
+        model=model,
+        thinking=_thinking_config(extended_thinking, thinking_tokens),
+    )
     typer.echo(response.content)
 
 
@@ -50,10 +72,22 @@ def claude_chat(
     prompt: str,
     history: list[str] | None = HISTORY_OPTION,
     model: str | None = typer.Option(None, help="モデル名を上書きします。"),
+    extended_thinking: bool = typer.Option(
+        default=False,
+        help="Claude Extended Thinkingを有効化します。",
+    ),
+    thinking_tokens: int = typer.Option(
+        default=8192,
+        help="Extended Thinkingに割り当てるトークン数。",
+    ),
 ) -> None:
     """Generate a chat response with optional history."""
     messages = build_messages(prompt, history or [], system_prompt=_prompt_template().system)
-    response = _client().chat(messages, model=model)
+    response = _client().chat(
+        messages,
+        model=model,
+        thinking=_thinking_config(extended_thinking, thinking_tokens),
+    )
     typer.echo(response.content)
 
 
