@@ -4,6 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import typer
+from rich.console import Console
 
 from various_llm_benchmark.interfaces.commands.common import build_messages
 from various_llm_benchmark.llm.providers.dspy import DsPyLLMClient
@@ -17,6 +18,7 @@ from various_llm_benchmark.settings import settings
 
 
 dspy_app = typer.Typer(help="DsPyモデルを呼び出します。")
+console = Console()
 
 HISTORY_OPTION: list[str] | None = typer.Option(
     None,
@@ -62,11 +64,12 @@ def dspy_complete(
     light_model: bool = LIGHT_MODEL_OPTION,
 ) -> None:
     """Generate a single-turn response with DsPy."""
-    response = _client().generate(
-        _prompt_template().to_prompt_text(prompt),
-        model=_resolve_model(model, light_model),
-    )
-    typer.echo(response.content)
+    with console.status("DsPyで応答生成中...", spinner="dots"):
+        response = _client().generate(
+            _prompt_template().to_prompt_text(prompt),
+            model=_resolve_model(model, light_model),
+        )
+    console.print(response.content)
 
 
 @dspy_app.command("chat")
@@ -78,8 +81,9 @@ def dspy_chat(
 ) -> None:
     """Generate a chat response with optional history."""
     messages = build_messages(prompt, history or [], system_prompt=_prompt_template().system)
-    response = _client().chat(messages, model=_resolve_model(model, light_model))
-    typer.echo(response.content)
+    with console.status("DsPyで履歴付き応答を生成中...", spinner="dots"):
+        response = _client().chat(messages, model=_resolve_model(model, light_model))
+    console.print(response.content)
 
 
 @dspy_app.command("optimize")
@@ -94,17 +98,18 @@ def dspy_optimize(
     """DsPy Optimizerを使ってプロンプトをチューニングします."""
     dataset = Path(dataset_path)
     examples = load_prompt_tuning_examples(dataset)
-    result: PromptOptimizationResult = optimize_prompt(
-        examples,
-        _prompt_template(),
-        model=_resolve_model_or_default(model, light_model),
-        temperature=settings.default_temperature,
-        max_bootstrapped_demos=max_bootstrapped_demos,
-        num_candidates=num_candidates,
-        num_threads=num_threads,
-    )
+    with console.status("DsPyでプロンプトを最適化中...", spinner="dots"):
+        result: PromptOptimizationResult = optimize_prompt(
+            examples,
+            _prompt_template(),
+            model=_resolve_model_or_default(model, light_model),
+            temperature=settings.default_temperature,
+            max_bootstrapped_demos=max_bootstrapped_demos,
+            num_candidates=num_candidates,
+            num_threads=num_threads,
+        )
 
-    typer.echo("=== DsPy Prompt Optimization ===")
-    typer.echo(f"データセット件数: {result.trainset_size}")
-    typer.echo(f"ベーススコア: {result.base_score:.3f}")
-    typer.echo(f"最適化後スコア: {result.optimized_score:.3f}")
+    console.print("[bold]=== DsPy Prompt Optimization ===[/bold]")
+    console.print(f"データセット件数: {result.trainset_size}")
+    console.print(f"ベーススコア: {result.base_score:.3f}")
+    console.print(f"最適化後スコア: {result.optimized_score:.3f}")

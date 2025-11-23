@@ -5,6 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import typer
+from rich.console import Console
 
 from various_llm_benchmark.agents.providers import PydanticAIAgentProvider
 from various_llm_benchmark.interfaces.commands.common import build_messages
@@ -15,6 +16,7 @@ from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_p
 from various_llm_benchmark.settings import settings
 
 pydantic_ai_app = typer.Typer(help="Pydantic AIエージェントを呼び出します。")
+console = Console()
 
 HISTORY_OPTION: list[str] | None = typer.Option(
     None,
@@ -89,8 +91,9 @@ def pydantic_ai_complete(
     provider = create_provider(
         model=model, use_light_model=light_model, temperature=temperature,
     )
-    response = provider.complete(prompt)
-    typer.echo(response.content)
+    with console.status("Pydantic AIで応答生成中...", spinner="dots"):
+        response = provider.complete(prompt)
+    console.print(response.content)
 
 
 @pydantic_ai_app.command("chat")
@@ -106,8 +109,9 @@ def pydantic_ai_chat(
     provider = create_provider(
         model=model, use_light_model=light_model, temperature=temperature,
     )
-    response = provider.chat(messages)
-    typer.echo(response.content)
+    with console.status("Pydantic AIで履歴付き応答を生成中...", spinner="dots"):
+        response = provider.chat(messages)
+    console.print(response.content)
 
 
 @pydantic_ai_app.command("vision")
@@ -124,8 +128,9 @@ def pydantic_ai_vision(
     provider = create_provider(
         model=model, use_light_model=light_model, temperature=temperature,
     )
-    response = provider.vision(prompt, image_input)
-    typer.echo(response.content)
+    with console.status("Pydantic AIで画像を解析中...", spinner="dots"):
+        response = provider.vision(prompt, image_input)
+    console.print(response.content)
 
 
 @pydantic_ai_app.command("web-search")
@@ -139,5 +144,6 @@ def pydantic_ai_web_search(
     search = resolve_web_search_client(
         "openai", category=category, use_light_model=light_model,
     )
-    response = search(prompt, model=model)
-    typer.echo(response.content)
+    with console.status("Pydantic AI経由でWeb検索中...", spinner="dots"):
+        response = search(prompt, model=model)
+    console.print(response.content)

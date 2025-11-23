@@ -4,6 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import typer
+from rich.console import Console
 
 from various_llm_benchmark.agents.providers import GoogleADKProvider
 from various_llm_benchmark.interfaces.commands.common import build_messages
@@ -13,6 +14,7 @@ from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_p
 from various_llm_benchmark.settings import settings
 
 adk_app = typer.Typer(help="Google ADK エージェントを呼び出します。")
+console = Console()
 
 HISTORY_OPTION: list[str] | None = typer.Option(
     None,
@@ -49,16 +51,18 @@ def _create_provider(*, use_light_model: bool = False) -> GoogleADKProvider:
 @adk_app.command("complete")
 def adk_complete(prompt: str, light_model: bool = LIGHT_MODEL_OPTION) -> None:
     """Google ADKによる単発応答を実行します."""
-    response = _create_provider(use_light_model=light_model).complete(prompt)
-    typer.echo(response.content)
+    with console.status("Google ADKで応答生成中...", spinner="dots"):
+        response = _create_provider(use_light_model=light_model).complete(prompt)
+    console.print(response.content)
 
 
 @adk_app.command("chat")
 def adk_chat(prompt: str, history: list[str] | None = HISTORY_OPTION, light_model: bool = LIGHT_MODEL_OPTION) -> None:
     """Google ADKによる履歴付き応答を実行します."""
     messages = build_messages(prompt, history or [], system_prompt=_prompt_template().system)
-    response = _create_provider(use_light_model=light_model).chat(messages)
-    typer.echo(response.content)
+    with console.status("Google ADKで履歴付き応答を生成中...", spinner="dots"):
+        response = _create_provider(use_light_model=light_model).chat(messages)
+    console.print(response.content)
 
 
 @adk_app.command("web-search")
@@ -69,8 +73,9 @@ def adk_web_search(
 ) -> None:
     """GeminiのWeb検索ツールをADKと同じキーで呼び出します."""
     client = build_gemini_web_search_tool(use_light_model=light_model)
-    response = client.search(prompt, model=model)
-    typer.echo(response.content)
+    with console.status("Google ADKのWeb検索ツールを呼び出し中...", spinner="dots"):
+        response = client.search(prompt, model=model)
+    console.print(response.content)
 
 
 @adk_app.command("vision")
@@ -78,5 +83,6 @@ def adk_vision(prompt: str, image_path: Path = IMAGE_ARGUMENT, light_model: bool
     """Google ADKによる画像付き推論を実行します."""
     resolved_path = Path(image_path)
     image_input = read_image_file(resolved_path)
-    response = _create_provider(use_light_model=light_model).vision(prompt, image_input)
-    typer.echo(response.content)
+    with console.status("Google ADKで画像解析中...", spinner="dots"):
+        response = _create_provider(use_light_model=light_model).vision(prompt, image_input)
+    console.print(response.content)

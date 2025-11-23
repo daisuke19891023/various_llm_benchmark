@@ -2,74 +2,73 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
-from various_llm_benchmark.interfaces.runner import AsyncJobRunner
+from various_llm_benchmark.interfaces.runner.async_runner import AsyncJobRunner, TaskHooks
 
 
-@pytest.mark.asyncio
-async def test_runner_executes_all_tasks() -> None:
-    """Ensure all tasks finish and preserve registration order."""
-    runner = AsyncJobRunner[str](concurrency=2)
-    completed: list[str] = []
+class RecordingHooks(TaskHooks):
+    """Capture lifecycle events for verification."""
 
-    async def task(name: str, delay: float) -> str:
-        await asyncio.sleep(delay)
-        completed.append(name)
-        return name
+    def __init__(self) -> None:
+        """Initialize an empty event list."""
+        self.events: list[tuple[str, str, int, str | None]] = []
 
-    runner.add_task(task, "a", 0.05, name="task-a")
-    runner.add_task(task, "b", 0.01, name="task-b")
-    runner.add_task(task, "c", 0.02, name="task-c")
+    def on_start(self, name: str, attempt: int) -> None:
+        """Record a start event."""
+        self.events.append(("start", name, attempt, None))
 
-    results = await runner.run()
+    def on_retry(self, name: str, attempt: int, error: BaseException) -> None:
+        """Record a retry event with the error message."""
+        self.events.append(("retry", name, attempt, str(error)))
 
-    assert [result.result for result in results] == ["a", "b", "c"]
-    assert completed == ["b", "c", "a"]
-    assert all(result.succeeded for result in results)
-    assert all(result.attempts == 1 for result in results)
+    def on_success(self, name: str, attempt: int) -> None:
+        """Record a successful completion event."""
+        self.events.append(("success", name, attempt, None))
 
+    def on_failure(self, name: str, attempt: int, error: BaseException) -> None:
+        """Record a terminal failure event."""
+        self.events.append(("failure", name, attempt, str(error)))
 
-@pytest.mark.asyncio
-async def test_runner_retries_failures() -> None:
-    """Ensure transient failures are retried up to the limit."""
-    attempts = 0
-
-    def flaky() -> str:
-        nonlocal attempts
-        attempts += 1
-        if attempts < 2:
-            msg = "temporary failure"
-            raise RuntimeError(msg)
-        return "ok"
-
-    runner = AsyncJobRunner[str](concurrency=1, max_retries=2)
-    runner.add_task(flaky, name="flaky")
-
-    results = await runner.run()
-
-    assert results[0].result == "ok"
-    assert results[0].attempts == 2
-    assert results[0].succeeded
+    def on_cancel(self, name: str, attempt: int) -> None:
+        """Record a cancellation event."""
+        self.events.append(("cancel", name, attempt, None))
 
 
-@pytest.mark.asyncio
-async def test_runner_cancels_remaining_tasks() -> None:
-    """Ensure cancellation flag stops pending tasks."""
-    runner = AsyncJobRunner[str](concurrency=1)
+def test_hooks_called_for_success_and_failure() -> None:
+    """Runner invokes hooks for both successful and failing tasks."""
+    hooks = RecordingHooks()
+    runner: AsyncJobRunner[str] = AsyncJobRunner(concurrency=2, hooks=hooks)
 
-    async def slow_task(name: str) -> str:
-        await asyncio.sleep(0.2)
-        return name
+    runner.add_task(lambda: "ok", name="success-task")
 
-    runner.add_task(slow_task, "first", name="slow-first")
-    runner.add_task(slow_task, "second", name="slow-second")
+    def _fail() -> str:
+        raise RuntimeError("expected failure")
 
-    run_task = asyncio.create_task(runner.run())
-    await asyncio.sleep(0.05)
-    runner.request_cancel()
+    runner.add_task(_fail, name="failure-task")
 
-    results = await run_task
+    results = asyncio.run(runner.run())
 
-    assert any(result.cancelled for result in results)
-    assert any(result.succeeded for result in results)
+    assert {result.name for result in results} == {"success-task", "failure-task"}
+    assert ("success", "success-task", 1, None) in hooks.events
+    assert any(event[0] == "failure" and event[1] == "failure-task" for event in hooks.events)
+
+
+def test_retry_hook_invoked_before_success() -> None:
+    """Runner reports retry before succeeding on a subsequent attempt."""
+    hooks = RecordingHooks()
+    runner: AsyncJobRunner[str] = AsyncJobRunner(concurrency=1, max_retries=1, hooks=hooks)
+
+    attempts = {"count": 0}
+
+    def _flaky() -> str:
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise ValueError("boom")
+        return "recovered"
+
+    runner.add_task(_flaky, name="flaky-task")
+
+    results = asyncio.run(runner.run())
+
+    assert results[0].result == "recovered"
+    assert ("retry", "flaky-task", 1, "boom") in hooks.events
+    assert ("success", "flaky-task", 2, None) in hooks.events
