@@ -9,6 +9,7 @@ from google.genai import types as genai_types
 from various_llm_benchmark.llm.tools.registry import (
     CODE_EXECUTION_TAG,
     NativeToolType,
+    SHELL_TAG,
     ToolRegistration,
     WEB_SEARCH_TAG,
 )
@@ -23,6 +24,10 @@ def _is_web_search(tool: ToolRegistration) -> bool:
 
 def _is_code_execution(tool: ToolRegistration) -> bool:
     return tool.native_type is NativeToolType.CODE_EXECUTION or CODE_EXECUTION_TAG in tool.tags
+
+
+def _is_shell(tool: ToolRegistration) -> bool:
+    return tool.native_type is NativeToolType.SHELL or SHELL_TAG in tool.tags
 
 
 def _function_payload(tool: ToolRegistration) -> dict[str, object]:
@@ -43,6 +48,9 @@ def to_openai_tools_payload(tools: Sequence[ToolRegistration]) -> list[dict[str,
             continue
         if _is_web_search(tool):
             payload.append({"type": "web_search"})
+            continue
+        if _is_shell(tool):
+            payload.append({"type": "bash"})
             continue
         if _is_code_execution(tool):
             payload.append({"type": "code_interpreter"})
@@ -66,6 +74,9 @@ def to_anthropic_tools_payload(tools: Sequence[ToolRegistration]) -> list[dict[s
             continue
         if _is_web_search(tool):
             payload.append({"type": "web_search"})
+            continue
+        if _is_shell(tool):
+            payload.append({"type": "bash", "name": tool.name})
             continue
         if _is_code_execution(tool):
             payload.append({"type": "code_execution_20250825", "name": "code_execution"})
