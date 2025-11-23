@@ -5,19 +5,18 @@ from typing import TYPE_CHECKING, Any, cast
 from collections.abc import Awaitable, Callable, Coroutine, Iterable
 from uuid import uuid4
 
-from google import adk, genai
+from google.adk import Agent
 from google.adk.agents.run_config import RunConfig
 from google.adk.events.event import Event
 from google.adk.runners import InMemoryRunner
+from google.genai import types
 
 from various_llm_benchmark.models import ChatMessage, ImageInput, LLMResponse
 
 if TYPE_CHECKING:
     from google.adk.sessions.session import Session
 
-types = genai.types
-
-RunnerFactory = Callable[[adk.Agent], object]
+RunnerFactory = Callable[[Agent], object]
 RunFunction = Callable[[Any, str, types.Content, RunConfig], Iterable[Event]]
 
 
@@ -35,9 +34,7 @@ class GoogleADKProvider:
         run_function: RunFunction | None = None,
     ) -> None:
         """Configure provider defaults and runner hooks."""
-        configure_fn = getattr(genai, "configure", None)
-        if callable(configure_fn):
-            configure_fn(api_key=api_key)
+        self._api_key = api_key
         self._model = model
         self._instructions = instructions
         self._temperature = temperature
@@ -84,8 +81,8 @@ class GoogleADKProvider:
         events = list(self._run_function(runner, session.id, new_message, self._run_config))
         return self._to_response(events)
 
-    def _build_agent(self) -> adk.Agent:
-        return adk.Agent(
+    def _build_agent(self) -> Agent:
+        return Agent(
             name=self._agent_name,
             description="Agent powered by Google ADK",
             model=self._model,
@@ -161,7 +158,7 @@ class GoogleADKProvider:
         return event.__dict__.copy()
 
     @staticmethod
-    def _default_runner_factory(agent: adk.Agent) -> object:
+    def _default_runner_factory(agent: Agent) -> object:
         return InMemoryRunner(agent=agent)
 
     def _default_run_function(
