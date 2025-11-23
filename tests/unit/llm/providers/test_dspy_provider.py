@@ -22,10 +22,13 @@ class _DummyLM(SupportsDsPyLM):
         temperature: float,
         max_tokens: int = 1000,
         cache: bool = True,
+        model_type: str = "chat",
+        use_text_choice: bool = False,
         **kwargs: Any,
     ) -> None:
         self.model = model
-        self.model_type = "chat"
+        self.model_type = model_type
+        self.use_text_choice = use_text_choice
         self.kwargs: dict[str, object] = {
             "temperature": temperature,
             "max_tokens": max_tokens,
@@ -46,7 +49,10 @@ class _DummyLM(SupportsDsPyLM):
             message_obj = SimpleNamespace(content=completion)
         else:
             message_obj = SimpleNamespace(content=f"echo:{prompt}")
-        choice = SimpleNamespace(message=message_obj)
+        if self.use_text_choice:
+            choice = SimpleNamespace(text=message_obj.content)
+        else:
+            choice = SimpleNamespace(message=message_obj)
         response = SimpleNamespace(
             choices=[choice],
             model=self.model,
@@ -69,8 +75,29 @@ class _DummyLM(SupportsDsPyLM):
             temperature=temperature,
             max_tokens=max_tokens,
             cache=cache,
+            model_type=self.model_type,
+            use_text_choice=self.use_text_choice,
             **updated_kwargs,
         )
+
+
+def test_generate_normalizes_choice_text() -> None:
+    """Completion-style outputs with `choice.text` should be normalized."""
+    def factory(*, model: str, temperature: float, **kwargs: Any) -> SupportsDsPyLM:
+        return _DummyLM(
+            model=model,
+            temperature=temperature,
+            model_type="completion",
+            use_text_choice=True,
+            **kwargs,
+        )
+
+    client = DsPyLLMClient("dspy-completion", temperature=0.1, lm_factory=factory)
+
+    response = client.generate("completion prompt")
+
+    assert response.content == "echo:completion prompt"
+    assert response.raw["outputs"] == ["echo:completion prompt"]
 
 
 def test_generate_calls_dspy_lm() -> None:
