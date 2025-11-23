@@ -115,7 +115,7 @@ uv run various-llm-benchmark pydantic-ai vision "この画像の内容を要約�
 - Web検索ツールは`tools`サブコマンドに加えて`agent` / `agent-sdk` / `google-adk`からも呼び出せます。
 
 ### Compare (複数プロバイダーの並列比較)
-`compare chat` サブコマンドでは、Richの`Progress`/`Spinner`を用いて各プロバイダーの進行状況やリトライ、失敗を可視化します。`asyncio.run`の処理時間も秒数で表示されます。
+`compare chat` サブコマンドでは、Richの`Progress`/`Spinner`を用いて各プロバイダーの進行状況やリトライ、失敗を可視化します。`asyncio.run`の処理時間も秒数で表示され、結果テーブルには経過秒数・コール回数・利用ツールが併記されます。完了後にプロバイダー/モデルごとの累積秒数と総コール数をまとめたサマリテーブルも表示されます。
 
 ```bash
 uv run various-llm-benchmark compare chat "最新の機能を教えて" \
@@ -137,7 +137,7 @@ uv run various-llm-benchmark compare chat "最新の機能を教えて" \
 # ┗━━━━━━━━━━┻━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
-`--format json` を指定すると、コンソールにはJSONを整形表示し、`--output-file`で同じ内容をUTF-8で保存します。
+`--format json` を指定すると、コンソールにはJSONを整形表示し、`--output-file`で同じ内容をUTF-8で保存します。トップレベルに`results`と`summary`を持ち、`summary`にはモデル別の累積時間・コール数・ツール名を含みます。
 
 ### ツール呼び出し (Web Search)
 OpenAI/Claude/Geminiの組み込みWeb検索ツールを使った呼び出しを行えます。

@@ -27,7 +27,7 @@ from various_llm_benchmark.interfaces.runner import (
 from various_llm_benchmark.llm.providers.anthropic.client import AnthropicLLMClient
 from various_llm_benchmark.llm.providers.gemini.client import GeminiLLMClient
 from various_llm_benchmark.llm.providers.openai.client import OpenAILLMClient
-from various_llm_benchmark.models import ChatMessage, LLMResponse
+from various_llm_benchmark.models import ChatMessage, LLMResponse, ToolCall
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
 from various_llm_benchmark.settings import settings
 
@@ -95,6 +95,10 @@ PROMPT_KEYS: dict[str, str] = {
 }
 
 
+def _default_tool_calls() -> list[ToolCall]:
+    return []
+
+
 class ComparisonTarget(BaseModel):
     """Target provider and model pair."""
 
@@ -114,6 +118,20 @@ class ComparisonResult(BaseModel):
     model: str
     content: str | None = None
     error: str | None = None
+    elapsed_seconds: float | None = None
+    call_count: int | None = None
+    tool_calls: list[ToolCall] = Field(default_factory=_default_tool_calls)
+    tools: list[str] = Field(default_factory=list)
+
+
+class ComparisonSummary(BaseModel):
+    """Aggregated metrics for a provider/model pair."""
+
+    provider: str
+    model: str
+    total_elapsed_seconds: float
+    total_call_count: int
+    tools: list[str] = Field(default_factory=list)
 
 
 @cache
@@ -249,6 +267,10 @@ class CompareService:
             provider=target.provider,
             model=response.model,
             content=response.content,
+            elapsed_seconds=response.elapsed_seconds,
+            call_count=response.call_count,
+            tool_calls=response.tool_calls,
+            tools=response.tools,
         )
 
     async def _call_provider(
@@ -403,29 +425,95 @@ def _render_table(results: list[ComparisonResult]) -> Table:
     table = Table(title="Comparison Results", box=SIMPLE_HEAD)
     table.add_column("Provider", style="bold")
     table.add_column("Model")
+    table.add_column("Time (s)")
+    table.add_column("Calls")
+    table.add_column("Tools")
     table.add_column("Content or Error", overflow="fold")
 
     for result in results:
+        elapsed_display = f"{result.elapsed_seconds:.2f}" if result.elapsed_seconds is not None else "-"
+        call_count_display = str(result.call_count) if result.call_count is not None else "-"
+        tools_display = ", ".join(result.tools) if result.tools else "-"
         body = (
             f"[red]ERROR[/red]: {result.error}"
             if result.error is not None
             else result.content or ""
         )
-        table.add_row(result.provider, result.model, body)
+        table.add_row(
+            result.provider,
+            result.model,
+            elapsed_display,
+            call_count_display,
+            tools_display,
+            body,
+        )
     return table
 
 
-def _results_to_json(results: list[ComparisonResult]) -> str:
-    payload = [result.model_dump() for result in results]
+def _render_summary_table(summaries: list[ComparisonSummary]) -> Table:
+    table = Table(title="Summary", box=SIMPLE_HEAD)
+    table.add_column("Provider", style="bold")
+    table.add_column("Model")
+    table.add_column("Total Time (s)")
+    table.add_column("Total Calls")
+    table.add_column("Tools Used")
+
+    for summary in summaries:
+        tools_display = ", ".join(summary.tools) if summary.tools else "-"
+        table.add_row(
+            summary.provider,
+            summary.model,
+            f"{summary.total_elapsed_seconds:.2f}",
+            str(summary.total_call_count),
+            tools_display,
+        )
+    return table
+
+
+def results_to_json(results: list[ComparisonResult], summaries: list[ComparisonSummary]) -> str:
+    """Serialize comparison results and summaries to JSON."""
+    payload = {
+        "results": [result.model_dump() for result in results],
+        "summary": [summary.model_dump() for summary in summaries],
+    }
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
-def _render_results(results: list[ComparisonResult], output_format: str) -> Table | str:
+def summarize_results(results: list[ComparisonResult]) -> list[ComparisonSummary]:
+    """Aggregate elapsed time, call counts, and tool usage per provider/model."""
+    summary: dict[tuple[str, str], ComparisonSummary] = {}
+    for result in results:
+        key = (result.provider, result.model)
+        if key not in summary:
+            summary[key] = ComparisonSummary(
+                provider=result.provider,
+                model=result.model,
+                total_elapsed_seconds=0.0,
+                total_call_count=0,
+                tools=[],
+            )
+
+        entry = summary[key]
+        if result.elapsed_seconds is not None:
+            entry.total_elapsed_seconds += result.elapsed_seconds
+        if result.call_count is not None:
+            entry.total_call_count += result.call_count
+        if result.tools:
+            merged_tools = set(entry.tools)
+            merged_tools.update(result.tools)
+            entry.tools = sorted(merged_tools)
+
+    return list(summary.values())
+
+
+def _render_results(
+    results: list[ComparisonResult], summaries: list[ComparisonSummary], output_format: str,
+) -> Table | tuple[Table, Table] | str:
     normalized_format = output_format.lower()
     if normalized_format == "table":
-        return _render_table(results)
+        return _render_table(results), _render_summary_table(summaries)
     if normalized_format == "json":
-        return _results_to_json(results)
+        return results_to_json(results, summaries)
     error_message = "format は 'table' または 'json' で指定してください。"
     raise typer.BadParameter(error_message)
 
@@ -439,7 +527,7 @@ def compare_chat(
     output_file: Path | None = OUTPUT_FILE_OPTION,
     concurrency: int = CONCURRENCY_OPTION,
     retries: int = RETRY_OPTION,
-) -> None:
+    ) -> None:
     """Run the same prompt across providers and compare responses."""
     messages_history = parse_history(history or [])
     parsed_targets = _parse_targets(targets)
@@ -469,8 +557,13 @@ def compare_chat(
     elapsed_seconds = perf_counter() - start_time
     console.print(f"[green]比較完了[/green] (経過 {elapsed_seconds:.2f} 秒)")
 
-    rendered_output = _render_results(results, output_format)
-    if isinstance(rendered_output, Table):
+    summaries = summarize_results(results)
+    rendered_output = _render_results(results, summaries, output_format)
+    if isinstance(rendered_output, tuple):
+        table, summary_table = rendered_output
+        console.print(table)
+        console.print(summary_table)
+    elif isinstance(rendered_output, Table):
         console.print(rendered_output)
     else:
         console.print_json(rendered_output)
@@ -478,5 +571,5 @@ def compare_chat(
     if output_file is not None:
         output_path = Path(output_file)
         with console.status(f"結果を {output_path} に保存中...", spinner="dots"):
-            output_path.write_text(_results_to_json(results), encoding="utf-8")
+            output_path.write_text(results_to_json(results, summaries), encoding="utf-8")
         console.print(f"[green]保存完了[/green]: {output_path}")

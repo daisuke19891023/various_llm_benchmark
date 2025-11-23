@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from time import perf_counter
 from typing import TYPE_CHECKING, Any, cast
 
 from various_llm_benchmark.llm.protocol import LLMClient
-from various_llm_benchmark.models import ChatMessage, ImageInput, LLMResponse
+from various_llm_benchmark.models import (
+    ChatMessage,
+    ImageInput,
+    LLMResponse,
+    normalize_tool_calls,
+)
 
 if TYPE_CHECKING:
     from anthropic import Anthropic
@@ -36,10 +42,19 @@ class AnthropicLLMClient(LLMClient):
             thinking=thinking,
         )
         messages_client = cast("Any", self._client.messages)
+        start = perf_counter()
         response = messages_client.create(**request_kwargs)
+        elapsed_seconds = perf_counter() - start
         content_data = cast("list[Any] | str", response.content)
         content = _extract_text(content_data)
-        return LLMResponse(content=content, model=response.model, raw=response.model_dump())
+        raw_response = response.model_dump()
+        return LLMResponse(
+            content=content,
+            model=response.model,
+            raw=raw_response,
+            elapsed_seconds=elapsed_seconds,
+            tool_calls=normalize_tool_calls(raw_response),
+        )
 
     def chat(
         self,
@@ -60,10 +75,19 @@ class AnthropicLLMClient(LLMClient):
             thinking=thinking,
         )
         messages_client = cast("Any", self._client.messages)
+        start = perf_counter()
         response = messages_client.create(**request_kwargs)
+        elapsed_seconds = perf_counter() - start
         content_data = cast("list[Any] | str", response.content)
         content = _extract_text(content_data)
-        return LLMResponse(content=content, model=response.model, raw=response.model_dump())
+        raw_response = response.model_dump()
+        return LLMResponse(
+            content=content,
+            model=response.model,
+            raw=raw_response,
+            elapsed_seconds=elapsed_seconds,
+            tool_calls=normalize_tool_calls(raw_response),
+        )
 
     def vision(
         self,
@@ -104,10 +128,19 @@ class AnthropicLLMClient(LLMClient):
             request_kwargs["system"] = system_prompt
 
         messages_client = cast("Any", self._client.messages)
+        start = perf_counter()
         response = messages_client.create(**request_kwargs)
+        elapsed_seconds = perf_counter() - start
         content_data = cast("list[Any] | str", response.content)
         content = _extract_text(content_data)
-        return LLMResponse(content=content, model=response.model, raw=response.model_dump())
+        raw_response = response.model_dump()
+        return LLMResponse(
+            content=content,
+            model=response.model,
+            raw=raw_response,
+            elapsed_seconds=elapsed_seconds,
+            tool_calls=normalize_tool_calls(raw_response),
+        )
 
 
 def _extract_text(content: list[Any] | str) -> str:

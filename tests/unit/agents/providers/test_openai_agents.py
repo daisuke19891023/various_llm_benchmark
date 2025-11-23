@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
+
+from various_llm_benchmark.agents.providers import openai_agents
 
 from various_llm_benchmark.agents.providers.openai_agents import OpenAIAgentsProvider
 from various_llm_benchmark.models import ChatMessage, LLMResponse
@@ -36,8 +38,10 @@ class RecordingRunFunction:
         return self._result
 
 
-def test_complete_builds_agent_and_runs_prompt() -> None:
+def test_complete_builds_agent_and_runs_prompt(monkeypatch: Any) -> None:
     """Ensure prompts are forwarded and agent defaults are applied."""
+    times = iter([1.0, 1.4])
+    monkeypatch.setattr(openai_agents, "perf_counter", lambda: next(times))
     run_function = RecordingRunFunction(cast("RunResult", StubRunResult("done")))
     provider = OpenAIAgentsProvider(
         api_key="dummy",
@@ -51,6 +55,9 @@ def test_complete_builds_agent_and_runs_prompt() -> None:
 
     assert isinstance(response, LLMResponse)
     assert response.content == "done"
+    assert response.elapsed_seconds == 0.3999999999999999
+    assert response.call_count == 1
+    assert response.tool_calls == []
     assert len(run_function.calls) == 1
     agent, run_input = run_function.calls[0]
     assert run_input == "hello"
