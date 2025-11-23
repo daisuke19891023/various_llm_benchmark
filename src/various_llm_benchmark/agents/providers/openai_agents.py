@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from agents import Agent, set_default_openai_key
 from agents.items import ItemHelpers, TResponseInputItem
@@ -9,9 +9,11 @@ from agents.model_settings import ModelSettings
 from agents.run import Runner
 
 from various_llm_benchmark.models import ChatMessage, ImageInput, LLMResponse
+from various_llm_benchmark.llm.tools.payloads import to_agents_sdk_tools_payload
 
 if TYPE_CHECKING:
     from agents.result import RunResult
+    from various_llm_benchmark.llm.tools.registry import ToolRegistration
 
 
 class AgentRunFunction(Protocol):
@@ -33,6 +35,7 @@ class OpenAIAgentsProvider:
         instructions: str,
         temperature: float = 0.7,
         run_function: AgentRunFunction | None = None,
+        tools: list[ToolRegistration] | None = None,
     ) -> None:
         """Configure the provider and default agent settings."""
         set_default_openai_key(api_key, use_for_tracing=False)
@@ -40,6 +43,7 @@ class OpenAIAgentsProvider:
         self._instructions = instructions
         self._temperature = temperature
         self._run_function = run_function or self._default_run_function
+        self._tools = tools or []
 
     def complete(self, prompt: str) -> LLMResponse:
         """Generate a single-turn response via Agents SDK."""
@@ -73,11 +77,14 @@ class OpenAIAgentsProvider:
         return self._to_response(run_result)
 
     def _build_agent(self) -> Agent:
+        agent_tools = to_agents_sdk_tools_payload(self._tools) if self._tools else []
+        typed_tools = cast("list[Any]", agent_tools)
         return Agent(
             name="openai-agents-sdk",
             instructions=self._instructions,
             model=self._model,
             model_settings=ModelSettings(temperature=self._temperature),
+            tools=typed_tools,
         )
 
     @staticmethod

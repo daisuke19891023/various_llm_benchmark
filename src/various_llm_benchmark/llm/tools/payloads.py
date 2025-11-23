@@ -22,6 +22,10 @@ def to_openai_tools_payload(tools: Sequence[ToolRegistration]) -> list[dict[str,
     """Convert tool registrations to OpenAI Responses `tools` payload."""
     payload: list[dict[str, object]] = []
     for tool in tools:
+        override = tool.provider_overrides.get("openai")
+        if override:
+            payload.append(override)
+            continue
         if _is_web_search(tool):
             payload.append({"type": "web_search"})
             continue
@@ -42,6 +46,10 @@ def to_anthropic_tools_payload(tools: Sequence[ToolRegistration]) -> list[dict[s
     """Convert tool registrations to Claude Messages API payload."""
     payload: list[dict[str, object]] = []
     for tool in tools:
+        override = tool.provider_overrides.get("anthropic")
+        if override:
+            payload.append(override)
+            continue
         if _is_web_search(tool):
             payload.append({"type": "web_search"})
             continue
@@ -59,6 +67,10 @@ def to_gemini_tools_payload(tools: Sequence[ToolRegistration]) -> list[dict[str,
     """Convert tool registrations to Gemini `tools` payload."""
     payload: list[dict[str, object]] = []
     for tool in tools:
+        override = tool.provider_overrides.get("gemini")
+        if override:
+            payload.append(override)
+            continue
         if _is_web_search(tool):
             payload.append({"google_search_retrieval": {}})
             continue

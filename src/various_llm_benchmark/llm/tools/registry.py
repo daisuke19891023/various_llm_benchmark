@@ -34,6 +34,7 @@ class ToolRegistration(BaseModel):
     input_schema: dict[str, Any]
     tags: set[str] = Field(default_factory=set)
     native_type: NativeToolType | None = None
+    provider_overrides: dict[str, dict[str, object]] = Field(default_factory=dict)
     handler: typing.Callable[..., Any]
     category: ToolCategory
 
