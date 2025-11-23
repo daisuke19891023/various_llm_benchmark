@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from functools import partial
 from enum import StrEnum
 import math
@@ -225,6 +225,61 @@ def generate_embedding(
     raise RetrieverError(msg)
 
 
+def generate_embeddings_batch(
+    texts: list[str],
+    *,
+    provider: EmbeddingProvider,
+    model: str | None = None,
+    timeout: float = 30.0,
+    max_retries: int = 2,
+    openai_client: SupportsOpenAIClient | None = None,
+    google_client: SupportsGoogleClient | None = None,
+    voyage_client: SupportsVoyageClient | None = None,
+) -> list[list[float]]:
+    """Generate embeddings for multiple texts in a single request when possible."""
+    if not texts:
+        return []
+
+    handler = _select_batch_handler(
+        texts,
+        provider=provider,
+        model=model,
+        timeout=timeout,
+        max_retries=max_retries,
+        openai_client=openai_client,
+        google_client=google_client,
+        voyage_client=voyage_client,
+    )
+
+    backoff: float = 0.2
+    errors: list[Exception] = []
+    for attempt in range(max_retries + 1):
+        try:
+            return handler()
+        except (APITimeoutError, APIConnectionError, RateLimitError) as exc:
+            errors.append(exc)
+            if attempt >= max_retries:
+                msg = "Batch embedding request failed after retries."
+                raise RetrieverError(msg) from exc
+            time.sleep(backoff)
+            backoff *= 2
+        except Exception as exc:  # pragma: no cover - defensive guard
+            errors.append(exc)
+            if attempt >= max_retries:
+                msg = "Batch embedding request failed unexpectedly."
+                raise RetrieverError(msg) from exc
+            time.sleep(backoff)
+            backoff *= 2
+
+    if errors:
+        last_error = errors[-1]
+        msg = "Batch embedding generation exhausted retries."
+        raise RetrieverError(msg) from last_error
+
+    msg = "Batch embedding generation failed without raising errors."
+    raise RetrieverError(msg)
+
+
 def pgvector_similarity_search(
     pool: ConnectionPoolProtocol,
     embedding: Sequence[float],
@@ -386,6 +441,29 @@ def _generate_openai_embedding(
     return _extract_embedding_vector(response)
 
 
+def _generate_openai_embeddings_batch(
+    texts: Sequence[str], *, model: str | None, timeout: float, client: SupportsOpenAIClient | None,
+) -> list[list[float]]:
+    embedding_model = model or settings.embedding_model or settings.openai_embedding_model
+    openai_client = cast(
+        "SupportsOpenAIClient",
+        client
+        or OpenAI(
+            api_key=settings.openai_api_key.get_secret_value(),
+            timeout=timeout,
+        ),
+    )
+    response = cast(
+        "CreateEmbeddingResponse",
+        openai_client.embeddings.create(
+            model=embedding_model,
+            input=list(texts),
+            timeout=timeout,
+        ),
+    )
+    return _extract_embedding_vectors(response, expected=len(texts))
+
+
 def _generate_google_embedding(
     text: str, *, model: str | None, timeout: float, client: SupportsGoogleClient | None,
 ) -> list[float]:
@@ -402,6 +480,34 @@ def _generate_google_embedding(
     return _extract_embedding_vector(response)
 
 
+def _generate_google_embeddings_batch(
+    texts: Sequence[str], *, model: str | None, timeout: float, client: SupportsGoogleClient | None, max_retries: int,
+) -> list[list[float]]:
+    embeddings: list[list[float]] = []
+    backoff: float = 0.1
+    for index, text in enumerate(texts):
+        current_retries = 0
+        while True:
+            try:
+                embeddings.append(
+                    _generate_google_embedding(
+                        text,
+                        model=model,
+                        timeout=timeout,
+                        client=client,
+                    ),
+                )
+                break
+            except (APITimeoutError, APIConnectionError, RateLimitError) as exc:
+                if current_retries >= max_retries:
+                    msg = f"Embedding request failed for item {index}"
+                    raise RetrieverError(msg) from exc
+                time.sleep(backoff)
+                backoff *= 2
+                current_retries += 1
+    return embeddings
+
+
 def _generate_voyage_embedding(
     text: str, *, model: str | None, timeout: float, client: SupportsVoyageClient | None,
 ) -> list[float]:
@@ -412,6 +518,18 @@ def _generate_voyage_embedding(
         model=embedding_model,
     )
     return _extract_embedding_vector(response)
+
+
+def _generate_voyage_embeddings_batch(
+    texts: Sequence[str], *, model: str | None, timeout: float, client: SupportsVoyageClient | None,
+) -> list[list[float]]:
+    embedding_model = model or settings.embedding_model or settings.voyage_embedding_model
+    voyage_client = client or VoyageClient(api_key=settings.voyage_api_key.get_secret_value(), timeout=timeout)
+    response = voyage_client.embed(
+        texts=list(texts),
+        model=embedding_model,
+    )
+    return _extract_embedding_vectors(response, expected=len(texts))
 
 
 def _extract_embedding_vector(payload: object) -> list[float]:
@@ -448,6 +566,110 @@ def _extract_embedding_vector(payload: object) -> list[float]:
             return _to_float_list(_ensure_iterable(cast("Iterable[float]", candidate)))
 
     msg = "Embedding payload does not contain an embedding vector."
+    raise RetrieverError(msg)
+
+
+def _extract_embedding_vectors(payload: object, *, expected: int) -> list[list[float]]:
+    payload_obj: object = payload
+    if isinstance(payload_obj, (str, bytes)):
+        msg = "Embedding payload does not contain batch embeddings."
+        raise RetrieverError(msg)
+
+    vectors = _extract_from_sequence_payload(payload_obj)
+    if vectors is None:
+        vectors = _extract_from_data_attr(payload_obj)
+    if vectors is None:
+        vectors = _extract_from_embeddings_attr(payload_obj)
+
+    if vectors is None:
+        msg = "Embedding payload does not contain batch embeddings."
+        raise RetrieverError(msg)
+
+    if expected and len(vectors) != expected:
+        msg = f"Expected {expected} embeddings but received {len(vectors)}"
+        raise RetrieverError(msg)
+
+    return vectors
+
+
+def _extract_from_sequence_payload(payload_obj: object) -> list[list[float]] | None:
+    if isinstance(payload_obj, Sequence) and payload_obj and not isinstance(payload_obj, (str, bytes)):
+        sequence_payload: Sequence[Any] = cast("Sequence[Any]", payload_obj)
+        return [_to_float_list(_ensure_iterable(cast("Iterable[float]", item))) for item in sequence_payload]
+    return None
+
+
+def _extract_from_data_attr(payload_obj: object) -> list[list[float]] | None:
+    payload_any = cast("Any", payload_obj)
+    data_attr: Any = getattr(payload_any, "data", None)
+    if not isinstance(data_attr, Sequence):
+        return None
+
+    data_sequence: Sequence[Any] = cast("Sequence[Any]", data_attr)
+    vectors: list[list[float]] = []
+    for item in data_sequence:
+        embedding_attr = cast("Iterable[float] | None", getattr(item, "embedding", None))
+        if embedding_attr is None and isinstance(item, Mapping):
+            mapping_item: Mapping[str, object] = cast("Mapping[str, object]", item)
+            embedding_attr = cast("Iterable[float] | None", mapping_item.get("embedding"))
+        if embedding_attr is None:
+            msg = "Embedding payload does not contain an embedding vector."
+            raise RetrieverError(msg)
+        vectors.append(_to_float_list(_ensure_iterable(embedding_attr)))
+    return vectors
+
+
+def _extract_from_embeddings_attr(payload_obj: object) -> list[list[float]] | None:
+    payload_any = cast("Any", payload_obj)
+    embeddings_attr: Any = getattr(payload_any, "embeddings", None)
+    if not (isinstance(embeddings_attr, Sequence) and embeddings_attr):
+        return None
+
+    embeddings_sequence: Sequence[Any] = cast("Sequence[Any]", embeddings_attr)
+    return [
+        _to_float_list(_ensure_iterable(cast("Iterable[float]", getattr(item, "values", item))))
+        for item in embeddings_sequence
+    ]
+
+
+def _select_batch_handler(
+    texts: Sequence[str],
+    *,
+    provider: EmbeddingProvider,
+    model: str | None,
+    timeout: float,
+    max_retries: int,
+    openai_client: SupportsOpenAIClient | None,
+    google_client: SupportsGoogleClient | None,
+    voyage_client: SupportsVoyageClient | None,
+) -> Callable[[], list[list[float]]]:
+    if provider is EmbeddingProvider.OPENAI:
+        return partial(
+            _generate_openai_embeddings_batch,
+            texts,
+            model=model,
+            timeout=timeout,
+            client=openai_client,
+        )
+    if provider is EmbeddingProvider.GOOGLE:
+        return partial(
+            _generate_google_embeddings_batch,
+            texts,
+            model=model,
+            timeout=timeout,
+            client=google_client,
+            max_retries=max_retries,
+        )
+    if provider is EmbeddingProvider.VOYAGE:
+        return partial(
+            _generate_voyage_embeddings_batch,
+            texts,
+            model=model,
+            timeout=timeout,
+            client=voyage_client,
+        )
+
+    msg = f"Unsupported embedding provider: {provider}"
     raise RetrieverError(msg)
 
 
@@ -513,6 +735,7 @@ __all__ = [
     "RetrieverError",
     "create_postgres_pool",
     "generate_embedding",
+    "generate_embeddings_batch",
     "merge_ranked_results",
     "pgroonga_full_text_search",
     "pgvector_similarity_search",
