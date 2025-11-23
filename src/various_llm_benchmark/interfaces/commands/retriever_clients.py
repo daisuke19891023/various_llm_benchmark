@@ -18,6 +18,7 @@ from various_llm_benchmark.llm.tools.registry import (
 from various_llm_benchmark.llm.tools.retriever import (
     EmbeddingProvider,
     RetrievedDocument,
+    RetrieverError,
     create_postgres_pool,
     generate_embedding,
     merge_ranked_results,
@@ -103,6 +104,10 @@ def _retrieve(
     threshold: float | None = None,
     timeout: float = 5.0,
 ) -> dict[str, object]:
+    if not settings.enable_pgvector and not settings.enable_pgroonga:
+        msg = "No retriever backends are enabled. Enable pgvector or pgroonga to run queries."
+        raise RetrieverError(msg)
+
     pool = create_postgres_pool()
     embedding_provider = EmbeddingProvider(provider)
     vector_results = []
