@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
 
 from various_llm_benchmark.llm.protocol import LLMClient
 from various_llm_benchmark.models import ChatMessage, ImageInput, LLMResponse
@@ -9,6 +9,37 @@ from various_llm_benchmark.models import ChatMessage, ImageInput, LLMResponse
 if TYPE_CHECKING:
     from openai import OpenAI
     from openai.types.responses import ResponseInputParam
+
+
+ReasoningEffort = Literal["none", "low", "medium", "high"]
+Verbosity = Literal["low", "medium", "high"]
+
+
+class ReasoningParam(TypedDict):
+    """Nested reasoning configuration for Responses API."""
+
+    effort: ReasoningEffort
+
+
+class TextParam(TypedDict, total=False):
+    """Nested text configuration for Responses API."""
+
+    verbosity: Verbosity
+
+
+class OpenAIRequestParams(TypedDict, total=False):
+    """Payload fields for OpenAI Responses API requests."""
+
+    model: str
+    input: ResponseInputParam | str
+    temperature: float
+    reasoning: ReasoningParam
+    text: TextParam
+
+
+def _create_response(client: OpenAI, params: OpenAIRequestParams) -> Any:
+    create = cast("Any", client.responses.create)
+    return create(**params)
 
 
 class OpenAILLMClient(LLMClient):
@@ -20,28 +51,52 @@ class OpenAILLMClient(LLMClient):
         self._default_model = default_model
         self._temperature = temperature
 
-    def generate(self, prompt: str, *, model: str | None = None) -> LLMResponse:
+    def generate(
+        self,
+        prompt: str,
+        *,
+        model: str | None = None,
+        reasoning_effort: ReasoningEffort | None = None,
+        verbosity: Verbosity | None = None,
+    ) -> LLMResponse:
         """Generate a completion without history."""
-        completion = self._client.responses.create(
-            model=model or self._default_model,
-            input=prompt,
-            temperature=self._temperature,
+        completion = _create_response(
+            self._client,
+            _build_request_kwargs(
+                model or self._default_model,
+                prompt,
+                self._temperature,
+                reasoning_effort,
+                verbosity,
+            ),
         )
-        content = _extract_content(cast("Any", completion.output))
+        content = _extract_content(completion.output)
         return LLMResponse(content=content, model=completion.model, raw=completion.model_dump())
 
-    def chat(self, messages: list[ChatMessage], *, model: str | None = None) -> LLMResponse:
+    def chat(
+        self,
+        messages: list[ChatMessage],
+        *,
+        model: str | None = None,
+        reasoning_effort: ReasoningEffort | None = None,
+        verbosity: Verbosity | None = None,
+    ) -> LLMResponse:
         """Generate a completion using chat messages."""
         openai_messages: list[dict[str, str]] = [
             {"role": msg.role, "content": msg.content} for msg in messages
         ]
         openai_input = cast("ResponseInputParam", openai_messages)
-        completion = self._client.responses.create(
-            model=model or self._default_model,
-            input=openai_input,
-            temperature=self._temperature,
+        completion = _create_response(
+            self._client,
+            _build_request_kwargs(
+                model or self._default_model,
+                openai_input,
+                self._temperature,
+                reasoning_effort,
+                verbosity,
+            ),
         )
-        content = _extract_content(cast("Any", completion.output))
+        content = _extract_content(completion.output)
         return LLMResponse(content=content, model=completion.model, raw=completion.model_dump())
 
     def vision(
@@ -51,6 +106,8 @@ class OpenAILLMClient(LLMClient):
         *,
         model: str | None = None,
         system_prompt: str | None = None,
+        reasoning_effort: ReasoningEffort | None = None,
+        verbosity: Verbosity | None = None,
     ) -> LLMResponse:
         """Generate a response that combines text prompts and image data."""
         text_prompt = _merge_prompt(prompt, system_prompt)
@@ -66,13 +123,37 @@ class OpenAILLMClient(LLMClient):
                 },
             ],
         )
-        completion = self._client.responses.create(
-            model=model or self._default_model,
-            input=openai_input,
-            temperature=self._temperature,
+        completion = _create_response(
+            self._client,
+            _build_request_kwargs(
+                model or self._default_model,
+                openai_input,
+                self._temperature,
+                reasoning_effort,
+                verbosity,
+            ),
         )
-        content = _extract_content(cast("Any", completion.output))
+        content = _extract_content(completion.output)
         return LLMResponse(content=content, model=completion.model, raw=completion.model_dump())
+
+
+def _build_request_kwargs(
+    model: str,
+    input_value: ResponseInputParam | str,
+    temperature: float,
+    reasoning_effort: ReasoningEffort | None,
+    verbosity: Verbosity | None,
+) -> OpenAIRequestParams:
+    request: OpenAIRequestParams = {
+        "model": model,
+        "input": input_value,
+        "temperature": temperature,
+    }
+    if reasoning_effort is not None:
+        request["reasoning"] = {"effort": reasoning_effort}
+    if verbosity is not None:
+        request["text"] = {"verbosity": verbosity}
+    return request
 
 
 def _extract_content(content: Any) -> str:
