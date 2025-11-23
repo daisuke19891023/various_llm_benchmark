@@ -110,13 +110,15 @@ class AsyncJobRunner[T]:
             try:
                 result = await task_callable()
             except asyncio.CancelledError:
+                already_cancelled = self._cancel_event.is_set()
                 self._cancel_event.set()
                 results[task_id] = TaskResult(
                     name=task_name,
                     attempts=attempt + 1,
                     cancelled=True,
                 )
-                queue.task_done()
+                if already_cancelled:
+                    raise
                 continue
             except Exception as exc:
                 if attempt < self._max_retries and not self._cancel_event.is_set():
