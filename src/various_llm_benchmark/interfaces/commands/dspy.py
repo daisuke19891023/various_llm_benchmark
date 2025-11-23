@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 
 import typer
 
 from various_llm_benchmark.interfaces.commands.common import build_messages
 from various_llm_benchmark.llm.providers.dspy import DsPyLLMClient
+from various_llm_benchmark.llm.providers.dspy.optimizer import (
+    PromptOptimizationResult,
+    load_prompt_tuning_examples,
+    optimize_prompt,
+)
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
 from various_llm_benchmark.settings import settings
 
@@ -45,6 +51,10 @@ def _resolve_model(model: str | None, light_model: bool) -> str | None:
     return None
 
 
+def _resolve_model_or_default(model: str | None, light_model: bool) -> str:
+    return _resolve_model(model, light_model) or settings.dspy_model
+
+
 @dspy_app.command("complete")
 def dspy_complete(
     prompt: str,
@@ -70,3 +80,31 @@ def dspy_chat(
     messages = build_messages(prompt, history or [], system_prompt=_prompt_template().system)
     response = _client().chat(messages, model=_resolve_model(model, light_model))
     typer.echo(response.content)
+
+
+@dspy_app.command("optimize")
+def dspy_optimize(
+    dataset_path: Path,
+    max_bootstrapped_demos: int = typer.Option(4, help="初期デモ数の上限"),
+    num_candidates: int = typer.Option(8, help="探索する候補数"),
+    num_threads: int = typer.Option(1, help="探索時のスレッド数"),
+    model: str | None = typer.Option(None, help="モデル名を上書きします。"),
+    light_model: bool = LIGHT_MODEL_OPTION,
+) -> None:
+    """DsPy Optimizerを使ってプロンプトをチューニングします."""
+    dataset = Path(dataset_path)
+    examples = load_prompt_tuning_examples(dataset)
+    result: PromptOptimizationResult = optimize_prompt(
+        examples,
+        _prompt_template(),
+        model=_resolve_model_or_default(model, light_model),
+        temperature=settings.default_temperature,
+        max_bootstrapped_demos=max_bootstrapped_demos,
+        num_candidates=num_candidates,
+        num_threads=num_threads,
+    )
+
+    typer.echo("=== DsPy Prompt Optimization ===")
+    typer.echo(f"データセット件数: {result.trainset_size}")
+    typer.echo(f"ベーススコア: {result.base_score:.3f}")
+    typer.echo(f"最適化後スコア: {result.optimized_score:.3f}")
