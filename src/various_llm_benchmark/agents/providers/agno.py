@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from time import perf_counter
 from typing import TYPE_CHECKING, Literal, Protocol, cast
 
 from agno.agent import Agent
@@ -10,7 +11,12 @@ from agno.models.google import Gemini
 from agno.models.message import Message
 from agno.models.openai import OpenAIChat
 
-from various_llm_benchmark.models import ChatMessage, ImageInput, LLMResponse
+from various_llm_benchmark.models import (
+    ChatMessage,
+    ImageInput,
+    LLMResponse,
+    normalize_tool_calls,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -71,8 +77,8 @@ class AgnoAgentProvider:
     def complete(self, prompt: str, *, provider: ProviderName, model: str | None = None) -> LLMResponse:
         """Generate a single-turn response."""
         agent, model_obj = self._build_agent(provider, model)
-        run_output = cast("RunResult", agent.run(prompt, stream=False))
-        return self._build_response(run_output, model_obj)
+        run_output, elapsed_seconds = self._run(agent, prompt)
+        return self._build_response(run_output, model_obj, elapsed_seconds)
 
     def chat(
         self, messages: list[ChatMessage], *, provider: ProviderName, model: str | None = None,
@@ -80,8 +86,8 @@ class AgnoAgentProvider:
         """Generate a response using message history."""
         agent, model_obj = self._build_agent(provider, model)
         agno_messages = [self._to_agno_message(message) for message in messages]
-        run_output = cast("RunResult", agent.run(agno_messages, stream=False))
-        return self._build_response(run_output, model_obj)
+        run_output, elapsed_seconds = self._run(agent, agno_messages)
+        return self._build_response(run_output, model_obj, elapsed_seconds)
 
     def vision(
         self,
@@ -102,8 +108,8 @@ class AgnoAgentProvider:
                 ],
             },
         ]
-        run_output = cast("RunResult", agent.run(run_input, stream=False))
-        return self._build_response(run_output, model_obj)
+        run_output, elapsed_seconds = self._run(agent, run_input)
+        return self._build_response(run_output, model_obj, elapsed_seconds)
 
     def _build_agent(
         self, provider: ProviderName, model: str | None,
@@ -135,11 +141,25 @@ class AgnoAgentProvider:
     def _to_agno_message(message: ChatMessage) -> Message:
         return Message(role=message.role, content=message.content)
 
-    def _build_response(self, run_output: RunResult, model: AgentModel) -> LLMResponse:
+    def _run(self, agent: AgentRunner, run_input: object) -> tuple[RunResult, float]:
+        start = perf_counter()
+        run_output = cast("RunResult", agent.run(run_input, stream=False))
+        elapsed_seconds = perf_counter() - start
+        return run_output, elapsed_seconds
+
+    def _build_response(self, run_output: RunResult, model: AgentModel, elapsed_seconds: float) -> LLMResponse:
         content = self._extract_content(run_output)
         model_name = run_output.model or model.id
         raw_output = run_output.__dict__.copy()
-        return LLMResponse(content=content, model=model_name, raw=raw_output)
+        tool_calls = normalize_tool_calls(raw_output)
+        return LLMResponse(
+            content=content,
+            model=model_name,
+            raw=raw_output,
+            elapsed_seconds=elapsed_seconds,
+            call_count=1,
+            tool_calls=tool_calls,
+        )
 
     @staticmethod
     def _extract_content(run_output: RunResult) -> str:

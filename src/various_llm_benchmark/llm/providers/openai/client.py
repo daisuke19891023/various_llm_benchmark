@@ -1,10 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from time import perf_counter
 from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
+from collections.abc import Mapping
 
 from various_llm_benchmark.llm.protocol import LLMClient
-from various_llm_benchmark.models import ChatMessage, ImageInput, LLMResponse
+from various_llm_benchmark.models import (
+    ChatMessage,
+    ImageInput,
+    LLMResponse,
+    normalize_tool_calls,
+)
 
 if TYPE_CHECKING:
     from openai import OpenAI
@@ -60,6 +66,7 @@ class OpenAILLMClient(LLMClient):
         verbosity: Verbosity | None = None,
     ) -> LLMResponse:
         """Generate a completion without history."""
+        start = perf_counter()
         completion = _create_response(
             self._client,
             _build_request_kwargs(
@@ -70,8 +77,9 @@ class OpenAILLMClient(LLMClient):
                 verbosity,
             ),
         )
+        elapsed_seconds = perf_counter() - start
         content = _extract_content(completion.output)
-        return LLMResponse(content=content, model=completion.model, raw=completion.model_dump())
+        return _build_response(completion, content, elapsed_seconds)
 
     def chat(
         self,
@@ -86,6 +94,7 @@ class OpenAILLMClient(LLMClient):
             {"role": msg.role, "content": msg.content} for msg in messages
         ]
         openai_input = cast("ResponseInputParam", openai_messages)
+        start = perf_counter()
         completion = _create_response(
             self._client,
             _build_request_kwargs(
@@ -96,8 +105,9 @@ class OpenAILLMClient(LLMClient):
                 verbosity,
             ),
         )
+        elapsed_seconds = perf_counter() - start
         content = _extract_content(completion.output)
-        return LLMResponse(content=content, model=completion.model, raw=completion.model_dump())
+        return _build_response(completion, content, elapsed_seconds)
 
     def vision(
         self,
@@ -123,6 +133,7 @@ class OpenAILLMClient(LLMClient):
                 },
             ],
         )
+        start = perf_counter()
         completion = _create_response(
             self._client,
             _build_request_kwargs(
@@ -133,8 +144,9 @@ class OpenAILLMClient(LLMClient):
                 verbosity,
             ),
         )
+        elapsed_seconds = perf_counter() - start
         content = _extract_content(completion.output)
-        return LLMResponse(content=content, model=completion.model, raw=completion.model_dump())
+        return _build_response(completion, content, elapsed_seconds)
 
 
 def _build_request_kwargs(
@@ -210,3 +222,26 @@ def _merge_prompt(prompt: str, system_prompt: str | None) -> str:
     if not system_prompt:
         return prompt
     return f"{system_prompt}\n\n{prompt}"
+
+
+def _build_response(completion: Any, content: str, elapsed_seconds: float) -> LLMResponse:
+    raw = cast("dict[str, object]", completion.model_dump())
+    tool_calls = normalize_tool_calls(raw)
+    return LLMResponse(
+        content=content,
+        model=completion.model,
+        raw=raw,
+        elapsed_seconds=elapsed_seconds,
+        call_count=_extract_call_count(raw),
+        tool_calls=tool_calls,
+    )
+
+
+def _extract_call_count(raw: Mapping[str, object]) -> int:
+    usage = raw.get("usage")
+    if isinstance(usage, Mapping):
+        usage_mapping: dict[str, object] = dict(cast("Mapping[str, object]", usage))
+        completion_tokens = usage_mapping.get("completion_tokens")
+        if isinstance(completion_tokens, int) and completion_tokens > 0:
+            return 1
+    return 1

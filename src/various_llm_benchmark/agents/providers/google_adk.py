@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from time import perf_counter
 from typing import TYPE_CHECKING, Any, cast
 from collections.abc import Awaitable, Callable, Coroutine, Iterable
 from uuid import uuid4
@@ -11,7 +12,12 @@ from google.adk.events.event import Event
 from google.adk.runners import InMemoryRunner
 from google.genai import types
 
-from various_llm_benchmark.models import ChatMessage, ImageInput, LLMResponse
+from various_llm_benchmark.models import (
+    ChatMessage,
+    ImageInput,
+    LLMResponse,
+    normalize_tool_calls,
+)
 
 if TYPE_CHECKING:
     from google.adk.sessions.session import Session
@@ -51,8 +57,8 @@ class GoogleADKProvider:
         runner = cast("Any", self._runner_factory(agent))
         session = self._create_session(runner)
         new_message = self._to_content(ChatMessage(role="user", content=prompt))
-        events = list(self._run_function(runner, session.id, new_message, self._run_config))
-        return self._to_response(events)
+        events, elapsed_seconds = self._run(runner, session.id, new_message)
+        return self._to_response(events, elapsed_seconds)
 
     def chat(self, messages: list[ChatMessage]) -> LLMResponse:
         """Generate a response with chat-style history."""
@@ -65,8 +71,8 @@ class GoogleADKProvider:
             self._seed_history(session_service, session, history)
         latest = messages[-1]
         new_message = self._to_content(latest)
-        events = list(self._run_function(runner, session.id, new_message, self._run_config))
-        return self._to_response(events)
+        events, elapsed_seconds = self._run(runner, session.id, new_message)
+        return self._to_response(events, elapsed_seconds)
 
     def vision(self, prompt: str, image: ImageInput) -> LLMResponse:
         """Generate a response that includes image input."""
@@ -78,8 +84,8 @@ class GoogleADKProvider:
             types.Part.from_uri(file_uri=image.as_data_url(), mime_type=image.media_type),
         ]
         new_message = types.Content(role="user", parts=parts)
-        events = list(self._run_function(runner, session.id, new_message, self._run_config))
-        return self._to_response(events)
+        events, elapsed_seconds = self._run(runner, session.id, new_message)
+        return self._to_response(events, elapsed_seconds)
 
     def _build_agent(self) -> Agent:
         return Agent(
@@ -127,13 +133,24 @@ class GoogleADKProvider:
             return self._agent_name
         return "user"
 
-    def _to_response(self, events: list[Event]) -> LLMResponse:
+    def _run(self, runner: Any, session_id: str, new_message: types.Content) -> tuple[list[Event], float]:
+        start = perf_counter()
+        events = list(self._run_function(runner, session_id, new_message, self._run_config))
+        elapsed_seconds = perf_counter() - start
+        return events, elapsed_seconds
+
+    def _to_response(self, events: list[Event], elapsed_seconds: float) -> LLMResponse:
         content = self._extract_content(events)
-        raw_events = [self._dump_event(event) for event in events]
+        raw_events: list[dict[str, object]] = [self._dump_event(event) for event in events]
+        raw_payload: dict[str, object] = {"events": raw_events, "config": self._run_metadata}
+        tool_calls = normalize_tool_calls(raw_payload)
         return LLMResponse(
             content=content,
             model=self._model,
-            raw={"events": raw_events, "config": self._run_metadata},
+            raw=raw_payload,
+            elapsed_seconds=elapsed_seconds,
+            call_count=1,
+            tool_calls=tool_calls,
         )
 
     @staticmethod

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import dataclasses
 import inspect
+from time import perf_counter
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from pydantic_ai import Agent, RunContext
@@ -20,7 +21,12 @@ from pydantic_ai.messages import (
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.tools import Tool
 
-from various_llm_benchmark.models import ChatMessage, ImageInput, LLMResponse
+from various_llm_benchmark.models import (
+    ChatMessage,
+    ImageInput,
+    LLMResponse,
+    normalize_tool_calls,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -79,8 +85,8 @@ class PydanticAIAgentProvider:
             temperature=temperature,
             tools=tools,
         )
-        run_result = cast("AgentRunResult", agent.run(prompt))
-        return self._build_response(run_result, model or self._model)
+        run_result, elapsed_seconds = self._run(agent, prompt)
+        return self._build_response(run_result, model or self._model, elapsed_seconds)
 
     def chat(
         self,
@@ -99,11 +105,8 @@ class PydanticAIAgentProvider:
             tools=tools,
         )
         history = [self._to_model_message(message) for message in messages]
-        run_result = cast(
-            "AgentRunResult",
-            agent.run(None, message_history=history),
-        )
-        return self._build_response(run_result, model or self._model)
+        run_result, elapsed_seconds = self._run(agent, None, message_history=history)
+        return self._build_response(run_result, model or self._model, elapsed_seconds)
 
     def vision(
         self,
@@ -123,8 +126,8 @@ class PydanticAIAgentProvider:
             tools=tools,
         )
         image_prompt: list[UserContent] = [prompt, ImageUrl(url=image.as_data_url(), media_type=image.media_type)]
-        run_result = cast("AgentRunResult", agent.run(image_prompt))
-        return self._build_response(run_result, model or self._model)
+        run_result, elapsed_seconds = self._run(agent, image_prompt)
+        return self._build_response(run_result, model or self._model, elapsed_seconds)
 
     def _build_agent(
         self,
@@ -180,10 +183,24 @@ class PydanticAIAgentProvider:
             return True
         return first.name in {"run_context", "ctx", "context"}
 
-    def _build_response(self, run_result: AgentRunResult, model_name: str) -> LLMResponse:
+    def _run(self, agent: AgentRunner, *args: object, **kwargs: object) -> tuple[AgentRunResult, float]:
+        start = perf_counter()
+        run_result = cast("AgentRunResult", agent.run(*args, **kwargs))
+        elapsed_seconds = perf_counter() - start
+        return run_result, elapsed_seconds
+
+    def _build_response(self, run_result: AgentRunResult, model_name: str, elapsed_seconds: float) -> LLMResponse:
         content = self._extract_content(run_result)
         raw_output = self._dump_raw(run_result)
-        return LLMResponse(content=content, model=model_name, raw=raw_output)
+        tool_calls = normalize_tool_calls(raw_output)
+        return LLMResponse(
+            content=content,
+            model=model_name,
+            raw=raw_output,
+            elapsed_seconds=elapsed_seconds,
+            call_count=1,
+            tool_calls=tool_calls,
+        )
 
     def _extract_content(self, run_result: AgentRunResult) -> str:
         response = run_result.response

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import various_llm_benchmark.agents.providers.google_adk as google_adk_module
+
 from google.adk.events.event import Event
 from google.adk.sessions.session import Session
 from google.genai import types
@@ -73,9 +75,11 @@ def _text_event(text: str) -> Event:
     )
 
 
-def test_complete_runs_runner_and_builds_agent() -> None:
+def test_complete_runs_runner_and_builds_agent(monkeypatch: Any) -> None:
     """Complete should build an agent and forward prompt to the runner."""
     created_agents: list[Any] = []
+    times = iter([1.5, 2.5])
+    monkeypatch.setattr(google_adk_module, "perf_counter", lambda: next(times))
     runner = StubRunner(responses=[_text_event("done")])
 
     def runner_factory(agent: Any) -> StubRunner:
@@ -93,6 +97,9 @@ def test_complete_runs_runner_and_builds_agent() -> None:
 
     assert response.content == "done"
     assert response.model == "gemini-test"
+    assert response.elapsed_seconds == 1.0
+    assert response.call_count == 1
+    assert response.tool_calls == []
     assert created_agents[0].instruction == "follow guidance"
     assert runner.calls
     assert runner.calls[0]["new_message"].parts[0].text == "hello"

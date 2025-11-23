@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from time import perf_counter
 from typing import TYPE_CHECKING, Any, cast
 
 from various_llm_benchmark.llm.protocol import LLMClient
-from various_llm_benchmark.models import ChatMessage, ImageInput, LLMResponse
+from various_llm_benchmark.models import (
+    ChatMessage,
+    ImageInput,
+    LLMResponse,
+    normalize_tool_calls,
+)
 
 if TYPE_CHECKING:
     from google.genai import Client
@@ -32,14 +38,23 @@ class GeminiLLMClient(LLMClient):
     ) -> LLMResponse:
         """Generate a completion without history."""
         models_client = cast("Any", self._client.models)
+        start = perf_counter()
         response: Any = models_client.generate_content(
             model=model or self._default_model,
             contents=prompt,
             config=_build_config(self._temperature, self._thinking_level, thinking_level),
         )
+        elapsed_seconds = perf_counter() - start
         content = _extract_text(response)
         model_name = _extract_model(response, model or self._default_model)
-        return LLMResponse(content=content, model=model_name, raw=_dump_raw(response))
+        raw_response = _dump_raw(response)
+        return LLMResponse(
+            content=content,
+            model=model_name,
+            raw=raw_response,
+            elapsed_seconds=elapsed_seconds,
+            tool_calls=normalize_tool_calls(raw_response),
+        )
 
     def chat(
         self,
@@ -63,10 +78,19 @@ class GeminiLLMClient(LLMClient):
         if system_prompt:
             request_kwargs["system_instruction"] = system_prompt
 
+        start = perf_counter()
         response: Any = models_client.generate_content(**request_kwargs)
+        elapsed_seconds = perf_counter() - start
         content = _extract_text(response)
         model_name = _extract_model(response, model or self._default_model)
-        return LLMResponse(content=content, model=model_name, raw=_dump_raw(response))
+        raw_response = _dump_raw(response)
+        return LLMResponse(
+            content=content,
+            model=model_name,
+            raw=raw_response,
+            elapsed_seconds=elapsed_seconds,
+            tool_calls=normalize_tool_calls(raw_response),
+        )
 
     def vision(
         self,
@@ -100,10 +124,19 @@ class GeminiLLMClient(LLMClient):
         if system_prompt:
             request_kwargs["system_instruction"] = system_prompt
 
+        start = perf_counter()
         response: Any = models_client.generate_content(**request_kwargs)
+        elapsed_seconds = perf_counter() - start
         content = _extract_text(response)
         model_name = _extract_model(response, model or self._default_model)
-        return LLMResponse(content=content, model=model_name, raw=_dump_raw(response))
+        raw_response = _dump_raw(response)
+        return LLMResponse(
+            content=content,
+            model=model_name,
+            raw=raw_response,
+            elapsed_seconds=elapsed_seconds,
+            tool_calls=normalize_tool_calls(raw_response),
+        )
 
 
 def _build_config(

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import various_llm_benchmark.agents.providers.agno as agno_module
+
 from agno.models.anthropic import Claude
 from agno.models.google import Gemini
 from agno.models.message import Message
@@ -49,9 +51,11 @@ def build_provider(factory: Callable[[OpenAIChat | Claude | Gemini], DummyAgent]
     )
 
 
-def test_complete_uses_openai_model_by_default() -> None:
+def test_complete_uses_openai_model_by_default(monkeypatch: Any) -> None:
     """Ensure OpenAI defaults and inputs are wired to the agent."""
     created: list[DummyAgent] = []
+    times = iter([2.0, 3.0])
+    monkeypatch.setattr(agno_module, "perf_counter", lambda: next(times))
 
     def factory(model: OpenAIChat | Claude | Gemini) -> DummyAgent:
         agent = DummyAgent(model)
@@ -64,6 +68,9 @@ def test_complete_uses_openai_model_by_default() -> None:
 
     assert response.content == "dummy-response"
     assert response.model == "gpt-test"
+    assert response.elapsed_seconds == 1.0
+    assert response.call_count == 1
+    assert response.tool_calls == []
     assert len(created) == 1
     assert isinstance(created[0].model, OpenAIChat)
     assert created[0].inputs == ["Hello"]

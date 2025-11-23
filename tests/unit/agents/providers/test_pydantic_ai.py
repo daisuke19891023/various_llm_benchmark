@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, TypedDict, cast
 
+import various_llm_benchmark.agents.providers.pydantic_ai as pydantic_ai_module
+
 from pydantic_ai.messages import (
     ImageUrl,
     ModelRequest,
@@ -82,9 +84,11 @@ class StubToolAgent(StubAgent):
         return StubRunResult(response=tool_response)
 
 
-def test_complete_uses_defaults_and_passes_prompt() -> None:
+def test_complete_uses_defaults_and_passes_prompt(monkeypatch: Any) -> None:
     """Complete should forward prompt and defaults to the agent."""
     created: list[StubAgent] = []
+    times = iter([0.0, 0.75])
+    monkeypatch.setattr(pydantic_ai_module, "perf_counter", lambda: next(times))
 
     def agent_factory(**kwargs: object) -> StubAgent:
         agent = StubAgent(**kwargs)
@@ -101,6 +105,9 @@ def test_complete_uses_defaults_and_passes_prompt() -> None:
     response = provider.complete("hello")
 
     assert response.content == "ok"
+    assert response.elapsed_seconds == 0.75
+    assert response.call_count == 1
+    assert response.tool_calls == []
     assert created
     agent = created[0]
     assert agent.kwargs["model"] == "gpt-mini"

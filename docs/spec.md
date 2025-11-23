@@ -29,7 +29,7 @@ src/various_llm_benchmark/
 ## CLI方針
 - Typerで単一のエントリポイント`various-llm-benchmark`を提供。
 - プロバイダーごとにサブコマンドを追加し、`prompt`による単発出力と`--history`による対話履歴をサポート。
-- 応答は標準出力にテキストとして返し、今後の機能追加に備えて`LLMResponse`モデルにメタデータを格納。
+- 応答は標準出力にテキストとして返し、`LLMResponse`モデルにメタデータ（経過秒数、呼び出し回数、ツール呼び出し詳細）を格納。
 
 ## 設定
 - `settings.Settings`で`.env`を読み込み、APIキーやデフォルトモデル、温度を管理。
@@ -44,3 +44,8 @@ src/various_llm_benchmark/
 - `agents/providers`配下にLangChain・Agno・OpenAI Agents SDKの実装を追加。
 - `interfaces/commands`に対応するエージェント用サブコマンドを追加し、対話フローを統一。
 - `docs/reference/`配下に各コマンドの詳細仕様と例を蓄積。
+
+## 比較結果の出力テンプレート
+- `compare chat`のテーブル出力には、プロバイダーごとに経過秒数・呼び出し回数・利用したツール名が含まれる。
+- JSON出力は`{"results": [...], "summary": [...]}`というトップレベル構造で、`summary`にはプロバイダー/モデルごとの累積秒数とコール総数、ツール名の一覧を格納する。
+- バルク実行時には、上記サマリを基にモデル別の累積時間とコール数を一覧できる。

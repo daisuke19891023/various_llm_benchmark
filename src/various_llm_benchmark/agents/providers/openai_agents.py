@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from time import perf_counter
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from agents import Agent, set_default_openai_key
@@ -8,7 +9,12 @@ from agents.items import ItemHelpers, TResponseInputItem
 from agents.model_settings import ModelSettings
 from agents.run import Runner
 
-from various_llm_benchmark.models import ChatMessage, ImageInput, LLMResponse
+from various_llm_benchmark.models import (
+    ChatMessage,
+    ImageInput,
+    LLMResponse,
+    normalize_tool_calls,
+)
 from various_llm_benchmark.llm.tools.payloads import to_agents_sdk_tools_payload
 
 if TYPE_CHECKING:
@@ -48,15 +54,15 @@ class OpenAIAgentsProvider:
     def complete(self, prompt: str) -> LLMResponse:
         """Generate a single-turn response via Agents SDK."""
         agent = self._build_agent()
-        run_result = self._run_function(agent, prompt)
-        return self._to_response(run_result)
+        run_result, elapsed_seconds = self._run(agent, prompt)
+        return self._to_response(run_result, elapsed_seconds)
 
     def chat(self, messages: list[ChatMessage]) -> LLMResponse:
         """Generate a response using chat-style history."""
         agent = self._build_agent()
         run_input: list[TResponseInputItem] = [self._to_agent_message(message) for message in messages]
-        run_result = self._run_function(agent, run_input)
-        return self._to_response(run_result)
+        run_result, elapsed_seconds = self._run(agent, run_input)
+        return self._to_response(run_result, elapsed_seconds)
 
     def vision(self, prompt: str, image: ImageInput) -> LLMResponse:
         """Generate a response that includes image content."""
@@ -73,8 +79,8 @@ class OpenAIAgentsProvider:
                 },
             ),
         ]
-        run_result = self._run_function(agent, run_input)
-        return self._to_response(run_result)
+        run_result, elapsed_seconds = self._run(agent, run_input)
+        return self._to_response(run_result, elapsed_seconds)
 
     def _build_agent(self) -> Agent:
         agent_tools = to_agents_sdk_tools_payload(self._tools) if self._tools else []
@@ -91,10 +97,24 @@ class OpenAIAgentsProvider:
     def _to_agent_message(message: ChatMessage) -> TResponseInputItem:
         return cast("TResponseInputItem", {"role": message.role, "content": message.content})
 
-    def _to_response(self, run_result: RunResult) -> LLMResponse:
+    def _run(self, agent: Agent, run_input: str | list[TResponseInputItem]) -> tuple[RunResult, float]:
+        start = perf_counter()
+        result = self._run_function(agent, run_input)
+        elapsed_seconds = perf_counter() - start
+        return result, elapsed_seconds
+
+    def _to_response(self, run_result: RunResult, elapsed_seconds: float) -> LLMResponse:
         content = self._extract_content(run_result)
         raw_output = run_result.__dict__.copy()
-        return LLMResponse(content=content, model=self._model, raw=raw_output)
+        tool_calls = normalize_tool_calls(raw_output)
+        return LLMResponse(
+            content=content,
+            model=self._model,
+            raw=raw_output,
+            elapsed_seconds=elapsed_seconds,
+            call_count=1,
+            tool_calls=tool_calls,
+        )
 
     @staticmethod
     def _extract_content(run_result: RunResult) -> str:
