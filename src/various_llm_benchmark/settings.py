@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr = Field(default=SecretStr(""), validation_alias="OPENAI_API_KEY")
     anthropic_api_key: SecretStr = Field(default=SecretStr(""), validation_alias="ANTHROPIC_API_KEY")
     gemini_api_key: SecretStr = Field(default=SecretStr(""), validation_alias="GEMINI_API_KEY")
+    voyage_api_key: SecretStr = Field(default=SecretStr(""), validation_alias="VOYAGE_API_KEY")
     openai_model: str = Field(default="gpt-5.1", validation_alias="OPENAI_MODEL")
     openai_light_model: str = Field(default="gpt-5.1-mini", validation_alias="OPENAI_LIGHT_MODEL")
     anthropic_model: str = Field(default="claude-4.5-sonnet", validation_alias="ANTHROPIC_MODEL")
@@ -20,6 +21,18 @@ class Settings(BaseSettings):
     gemini_light_model: str = Field(default="gemini-2.5-flash", validation_alias="GEMINI_LIGHT_MODEL")
     gemini_thinking_level: str | None = Field(
         default=None, validation_alias="GEMINI_THINKING_LEVEL",
+    )
+    openai_embedding_model: str = Field(
+        default="text-embedding-3-large", validation_alias="OPENAI_EMBEDDING_MODEL",
+    )
+    openai_embedding_model_light: str = Field(
+        default="text-embedding-3-small", validation_alias="OPENAI_EMBEDDING_MODEL_LIGHT",
+    )
+    google_embedding_model: str = Field(
+        default="text-embedding-004", validation_alias="GOOGLE_EMBEDDING_MODEL",
+    )
+    voyage_embedding_model: str = Field(
+        default="voyage-3", validation_alias="VOYAGE_EMBEDDING_MODEL",
     )
     dspy_model: str = Field(default="gpt-5.1", validation_alias="DSPY_MODEL")
     dspy_light_model: str = Field(default="gpt-5.1-mini", validation_alias="DSPY_LIGHT_MODEL")
@@ -46,7 +59,6 @@ class Settings(BaseSettings):
             key
             for key, value in (
                 ("OPENAI_API_KEY", self.openai_api_key.get_secret_value()),
-                ("ANTHROPIC_API_KEY", self.anthropic_api_key.get_secret_value()),
                 ("GEMINI_API_KEY", self.gemini_api_key.get_secret_value()),
             )
             if not value
@@ -61,10 +73,21 @@ class Settings(BaseSettings):
                         self.postgres_connection_string.get_secret_value(),
                     ),
                     ("POSTGRES_SCHEMA", self.postgres_schema),
-                    ("EMBEDDING_MODEL", self.embedding_model),
                 )
                 if not value
             )
+
+            embedding_models = [
+                self.embedding_model,
+                self.openai_embedding_model,
+                self.openai_embedding_model_light,
+                self.google_embedding_model,
+                self.voyage_embedding_model,
+            ]
+            if not any(embedding_models):
+                missing_keys.append(
+                    "EMBEDDING_MODEL or provider-specific embedding model",
+                )
 
             feature_specific_requirements: list[tuple[str, str]] = []
             if self.enable_pgvector:

@@ -26,7 +26,7 @@ from various_llm_benchmark.llm.tools.retriever import (
 )
 from various_llm_benchmark.settings import settings
 
-ProviderName = Literal["openai", "anthropic", "gemini"]
+ProviderName = Literal["openai", "google", "voyage"]
 
 
 class RetrieverHandler(Protocol):
@@ -147,8 +147,8 @@ def _ensure_retriever_tools_registered() -> None:
     """Register built-in retriever tool adapters."""
     for provider, description in (
         ("openai", "OpenAI 埋め込みでPGVector/PGroonga検索を行うビルトインツール"),
-        ("anthropic", "Anthropic 埋め込みでPGVector/PGroonga検索を行うビルトインツール"),
-        ("gemini", "Gemini 埋め込みでPGVector/PGroonga検索を行うビルトインツール"),
+        ("google", "Google (Gemini) 埋め込みでPGVector/PGroonga検索を行うビルトインツール"),
+        ("voyage", "Voyage AI 埋め込みでPGVector/PGroonga検索を行うビルトインツール"),
     ):
         try:
             _register_retriever_tool(

@@ -162,7 +162,7 @@ def test_agent_retriever_uses_resolver(monkeypatch: pytest.MonkeyPatch) -> None:
         *,
         category: ToolCategory = ToolCategory.BUILTIN,
     ) -> object:
-        assert provider == "gemini"
+        assert provider == "google"
         assert category is ToolCategory.BUILTIN
 
         def retrieve(
@@ -195,7 +195,7 @@ def test_agent_retriever_uses_resolver(monkeypatch: pytest.MonkeyPatch) -> None:
             "retriever",
             "topic",
             "--provider",
-            "gemini",
+            "google",
             "--model",
             "embed-v1",
             "--top-k",

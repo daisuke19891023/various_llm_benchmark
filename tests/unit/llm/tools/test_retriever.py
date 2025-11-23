@@ -5,7 +5,7 @@ from __future__ import annotations
 import httpx
 import math
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Self, cast
 
 import pytest
 from openai import APITimeoutError
@@ -16,11 +16,13 @@ from various_llm_benchmark.llm.tools.retriever import (
     RetrievedDocument,
     RetrieverError,
     SupportsEmbeddingCreate,
+    SupportsGoogleModels,
     generate_embedding,
     merge_ranked_results,
     pgroonga_full_text_search,
     pgvector_similarity_search,
 )
+from various_llm_benchmark.settings import settings
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
@@ -113,6 +115,44 @@ class FakeOpenAIClient:
         self.embeddings: SupportsEmbeddingCreate = embeddings
 
 
+class FakeGenAIModels:
+    """Google genai models stub recording embed calls."""
+
+    def __init__(self, payload: object) -> None:
+        """Store payload for embed_content returns."""
+        self.payload = payload
+        self.last_model: str | None = None
+        self.last_contents: list[str] | None = None
+
+    def embed_content(self, *, model: str, contents: list[str]) -> object:
+        """Record arguments and return preset payload."""
+        self.last_model = model
+        self.last_contents = contents
+        return self.payload
+
+
+class FakeGenAIClient:
+    """Google genai client stub exposing models."""
+
+    def __init__(self, payload: object) -> None:
+        """Attach stubbed models."""
+        self.models: SupportsGoogleModels = FakeGenAIModels(payload)
+
+
+class FakeVoyageClient:
+    """Voyage AI client stub exposing an embed method."""
+
+    def __init__(self, payload: object) -> None:
+        """Store payload for embed responses."""
+        self.payload = payload
+        self.called_with: tuple[list[str], str] | None = None
+
+    def embed(self, *, texts: list[str], model: str, **_: object) -> object:
+        """Record arguments and return preset payload."""
+        self.called_with = (texts, model)
+        return self.payload
+
+
 def test_generate_embedding_retries_on_transient_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """OpenAI embedding generation should retry transient failures."""
     def _sleep(_: float) -> None:
@@ -133,6 +173,40 @@ def test_generate_embedding_retries_on_transient_error(monkeypatch: pytest.Monke
 
     assert vector == [0.2, 0.3]
     assert embeddings.calls == 2
+
+
+def test_generate_embedding_uses_google_provider() -> None:
+    """Google embedding provider should call embed_content with defaults."""
+    payload = SimpleNamespace(embedding=SimpleNamespace(values=[0.4, 0.6]))
+    client = FakeGenAIClient(payload)
+
+    vector = generate_embedding(
+        "こんにちは",
+        provider=EmbeddingProvider.GOOGLE,
+        timeout=0.0,
+        google_client=client,
+    )
+
+    assert vector == [0.4, 0.6]
+    models = cast("FakeGenAIModels", client.models)
+    assert models.last_model == settings.google_embedding_model
+    assert models.last_contents == ["こんにちは"]
+
+
+def test_generate_embedding_uses_voyage_provider() -> None:
+    """Voyage AI embedding provider should call embed with defaults."""
+    payload = SimpleNamespace(embeddings=[[0.7, 0.8]])
+    client = FakeVoyageClient(payload)
+
+    vector = generate_embedding(
+        "hello",
+        provider=EmbeddingProvider.VOYAGE,
+        timeout=0.0,
+        voyage_client=client,
+    )
+
+    assert vector == [0.7, 0.8]
+    assert client.called_with == (["hello"], settings.voyage_embedding_model)
 
 
 def test_pgvector_similarity_search_filters_by_threshold() -> None:

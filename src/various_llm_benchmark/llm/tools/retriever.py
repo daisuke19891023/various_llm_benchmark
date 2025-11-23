@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
+from functools import partial
 from enum import StrEnum
 import math
 import time
 from typing import TYPE_CHECKING, Any, Protocol, Self, cast
 
-from anthropic import Anthropic
 from google.genai import Client
+from google.genai.types import HttpOptions
 from openai import APIConnectionError, APITimeoutError, OpenAI, RateLimitError
 from pydantic import BaseModel, Field
 from psycopg import Error as PsycopgError, sql
 from psycopg_pool import ConnectionPool, PoolTimeout
+from voyageai.client import Client as VoyageClient
 
 from various_llm_benchmark.settings import settings
 
@@ -31,8 +33,8 @@ class EmbeddingProvider(StrEnum):
     """Supported embedding providers."""
 
     OPENAI = "openai"
-    ANTHROPIC = "anthropic"
-    GEMINI = "gemini"
+    GOOGLE = "google"
+    VOYAGE = "voyage"
 
 
 class RetrievedDocument(BaseModel):
@@ -57,6 +59,28 @@ class SupportsOpenAIClient(Protocol):
     """Client interface exposing an embeddings attribute."""
 
     embeddings: SupportsEmbeddingCreate
+
+
+class SupportsGoogleModels(Protocol):
+    """Google client interface exposing an embed_content method."""
+
+    def embed_content(self, *, model: str, contents: list[str]) -> object:
+        """Create an embedding from the provided contents."""
+        ...
+
+
+class SupportsGoogleClient(Protocol):
+    """Client interface exposing models with embedding support."""
+
+    models: SupportsGoogleModels
+
+
+class SupportsVoyageClient(Protocol):
+    """Client interface exposing an embed method."""
+
+    def embed(self, *, texts: list[str], model: str, **kwargs: object) -> object:
+        """Create an embedding from the provided texts."""
+        ...
 
 
 class SupportsCursor(Protocol):
@@ -140,34 +164,43 @@ def generate_embedding(
     timeout: float = 30.0,
     max_retries: int = 2,
     openai_client: SupportsOpenAIClient | None = None,
-    anthropic_client: Anthropic | None = None,
-    gemini_client: Client | None = None,
+    google_client: SupportsGoogleClient | None = None,
+    voyage_client: SupportsVoyageClient | None = None,
 ) -> list[float]:
     """Generate an embedding vector using the requested provider with retries."""
+    if provider is EmbeddingProvider.OPENAI:
+        provider_handler = partial(
+            _generate_openai_embedding,
+            text,
+            model=model,
+            timeout=timeout,
+            client=openai_client,
+        )
+    elif provider is EmbeddingProvider.GOOGLE:
+        provider_handler = partial(
+            _generate_google_embedding,
+            text,
+            model=model,
+            timeout=timeout,
+            client=google_client,
+        )
+    elif provider is EmbeddingProvider.VOYAGE:
+        provider_handler = partial(
+            _generate_voyage_embedding,
+            text,
+            model=model,
+            timeout=timeout,
+            client=voyage_client,
+        )
+    else:
+        msg = f"Unsupported embedding provider: {provider}"
+        raise RetrieverError(msg)
+
     backoff: float = 0.2
     errors: list[Exception] = []
     for attempt in range(max_retries + 1):
         try:
-            if provider is EmbeddingProvider.OPENAI:
-                return _generate_openai_embedding(
-                    text,
-                    model=model,
-                    timeout=timeout,
-                    client=openai_client,
-                )
-            if provider is EmbeddingProvider.ANTHROPIC:
-                return _generate_anthropic_embedding(
-                    text,
-                    model=model,
-                    timeout=timeout,
-                    client=anthropic_client,
-                )
-            return _generate_gemini_embedding(
-                text,
-                model=model,
-                _timeout=timeout,
-                client=gemini_client,
-            )
+            return provider_handler()
         except (APITimeoutError, APIConnectionError, RateLimitError) as exc:
             errors.append(exc)
             if attempt >= max_retries:
@@ -333,7 +366,7 @@ def merge_ranked_results(
 def _generate_openai_embedding(
     text: str, *, model: str | None, timeout: float, client: SupportsOpenAIClient | None,
 ) -> list[float]:
-    embedding_model = model or settings.embedding_model
+    embedding_model = model or settings.embedding_model or settings.openai_embedding_model
     openai_client = cast(
         "SupportsOpenAIClient",
         client
@@ -353,28 +386,30 @@ def _generate_openai_embedding(
     return _extract_embedding_vector(response)
 
 
-def _generate_anthropic_embedding(
-    text: str, *, model: str | None, timeout: float, client: Anthropic | None,
+def _generate_google_embedding(
+    text: str, *, model: str | None, timeout: float, client: SupportsGoogleClient | None,
 ) -> list[float]:
-    embedding_model = model or settings.embedding_model
-    anthropic_client = client or Anthropic(api_key=settings.anthropic_api_key.get_secret_value(), timeout=timeout)
-    response = anthropic_client.messages.create(
+    embedding_model = model or settings.embedding_model or settings.google_embedding_model
+    http_options = HttpOptions(timeout=max(0, int(timeout)))
+    genai_client = client or Client(
+        api_key=settings.gemini_api_key.get_secret_value(),
+        http_options=http_options,
+    )
+    response = genai_client.models.embed_content(
         model=embedding_model,
-        messages=[{"role": "user", "content": text}],
-        max_tokens=1,
-        timeout=timeout,
+        contents=[text],
     )
     return _extract_embedding_vector(response)
 
 
-def _generate_gemini_embedding(
-    text: str, *, model: str | None, _timeout: float, client: Client | None,
+def _generate_voyage_embedding(
+    text: str, *, model: str | None, timeout: float, client: SupportsVoyageClient | None,
 ) -> list[float]:
-    embedding_model = model or settings.embedding_model
-    genai_client = client or Client(api_key=settings.gemini_api_key.get_secret_value())
-    response = genai_client.models.embed_content(
+    embedding_model = model or settings.embedding_model or settings.voyage_embedding_model
+    voyage_client = client or VoyageClient(api_key=settings.voyage_api_key.get_secret_value(), timeout=timeout)
+    response = voyage_client.embed(
+        texts=[text],
         model=embedding_model,
-        contents=[text],
     )
     return _extract_embedding_vector(response)
 
@@ -387,7 +422,8 @@ def _extract_embedding_vector(payload: object) -> list[float]:
 
     embedding_attr: Any = getattr(payload_obj, "embedding", None)
     if embedding_attr is not None:
-        return _to_float_list(_ensure_iterable(cast("Iterable[float]", embedding_attr)))
+        candidate = getattr(embedding_attr, "values", embedding_attr)
+        return _to_float_list(_ensure_iterable(cast("Iterable[float]", candidate)))
 
     data_attr: Any = getattr(payload_obj, "data", None)
     if isinstance(data_attr, Sequence) and data_attr:

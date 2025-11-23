@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 import json
 import typer
@@ -18,6 +19,8 @@ from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_p
 from various_llm_benchmark.settings import settings
 
 agent_app = typer.Typer(help="Agnoエージェントを呼び出します。")
+
+RetrieverProviderName = Literal["openai", "google", "voyage"]
 
 HISTORY_OPTION: list[str] | None = typer.Option(
     None,
@@ -39,6 +42,14 @@ PROVIDER_OPTION = typer.Option(
     "-p",
     case_sensitive=False,
     help="利用するプロバイダー (openai / anthropic / gemini)",
+)
+
+RETRIEVER_PROVIDER_OPTION: RetrieverProviderName = typer.Option(
+    "openai",
+    "--provider",
+    "-p",
+    case_sensitive=False,
+    help="リトリーバーで利用する埋め込みプロバイダー (openai / google / voyage)",
 )
 
 MODEL_OPTION: str | None = typer.Option(default=None, help="モデル名を上書きします。")
@@ -140,7 +151,7 @@ def agent_web_search(
 @agent_app.command("retriever")
 def agent_retriever(
     query: str,
-    provider: ProviderName = PROVIDER_OPTION,
+    provider: RetrieverProviderName = RETRIEVER_PROVIDER_OPTION,
     model: str | None = MODEL_OPTION,
     top_k: int | None = TOP_K_OPTION,
     threshold: float | None = THRESHOLD_OPTION,

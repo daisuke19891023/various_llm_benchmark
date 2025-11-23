@@ -14,7 +14,8 @@ TyperベースのCLIで複数のLLMやエージェントフレームワークを
    - `PGVECTOR_TABLE_NAME` / `PGROONGA_TABLE_NAME`: 各拡張で利用するテーブル名
    - `ENABLE_PGVECTOR` / `ENABLE_PGROONGA`: 拡張を有効化するフラグ (デフォルト: `false`)
    - `SEARCH_TOP_K` / `SEARCH_SCORE_THRESHOLD`: 検索での上位件数とスコア閾値 (デフォルト: それぞれ`5`/`0.0`)
-   - `EMBEDDING_MODEL`: 埋め込みモデル名 (例: `text-embedding-3-small`)
+   - 埋め込みモデル: `OPENAI_EMBEDDING_MODEL` / `OPENAI_EMBEDDING_MODEL_LIGHT` / `GOOGLE_EMBEDDING_MODEL` /
+     `VOYAGE_EMBEDDING_MODEL` (後方互換として`EMBEDDING_MODEL`も指定可能)
    - Dockerでpgvector + PGroongaを起動する場合は`docker-compose.yml`を利用できます (`docker compose up -d db`)
 
 ## プロンプト管理
