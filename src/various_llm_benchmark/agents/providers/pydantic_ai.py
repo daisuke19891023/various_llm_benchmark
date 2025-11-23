@@ -21,6 +21,7 @@ from pydantic_ai.messages import (
 from pydantic_ai.settings import ModelSettings
 from pydantic_ai.tools import Tool
 
+from various_llm_benchmark.logger import BaseComponent
 from various_llm_benchmark.models import (
     ChatMessage,
     ImageInput,
@@ -50,7 +51,7 @@ class AgentRunResult(Protocol):
     run_id: str | None
 
 
-class PydanticAIAgentProvider:
+class PydanticAIAgentProvider(BaseComponent):
     """Wrapper around pydantic-ai's Agent for unified interface."""
 
     def __init__(
@@ -79,6 +80,8 @@ class PydanticAIAgentProvider:
         tools: list[ToolRegistration] | None = None,
     ) -> LLMResponse:
         """Generate a single-turn response."""
+        self.log_start("pydantic_ai_complete", model=model or self._model)
+        self.log_io(direction="input", prompt=prompt)
         agent = self._build_agent(
             system_prompt=system_prompt,
             model=model,
@@ -86,7 +89,10 @@ class PydanticAIAgentProvider:
             tools=tools,
         )
         run_result, elapsed_seconds = self._run(agent, prompt)
-        return self._build_response(run_result, model or self._model, elapsed_seconds)
+        response = self._build_response(run_result, model or self._model, elapsed_seconds)
+        self.log_io(direction="output", model=response.model, content=response.content)
+        self.log_end("pydantic_ai_complete", elapsed_seconds=elapsed_seconds)
+        return response
 
     def chat(
         self,
@@ -98,6 +104,14 @@ class PydanticAIAgentProvider:
         tools: list[ToolRegistration] | None = None,
     ) -> LLMResponse:
         """Generate a response using prior chat history."""
+        model_name = model or self._model
+        self.log_start("pydantic_ai_chat", model=model_name, message_count=len(messages))
+        if messages:
+            self.log_io(
+                direction="input",
+                message_count=len(messages),
+                last_user_message=messages[-1].content,
+            )
         agent = self._build_agent(
             system_prompt=system_prompt,
             model=model,
@@ -106,7 +120,10 @@ class PydanticAIAgentProvider:
         )
         history = [self._to_model_message(message) for message in messages]
         run_result, elapsed_seconds = self._run(agent, None, message_history=history)
-        return self._build_response(run_result, model or self._model, elapsed_seconds)
+        response = self._build_response(run_result, model or self._model, elapsed_seconds)
+        self.log_io(direction="output", model=response.model, content=response.content)
+        self.log_end("pydantic_ai_chat", elapsed_seconds=elapsed_seconds)
+        return response
 
     def vision(
         self,
@@ -119,6 +136,13 @@ class PydanticAIAgentProvider:
         tools: list[ToolRegistration] | None = None,
     ) -> LLMResponse:
         """Generate a response that includes image content."""
+        model_name = model or self._model
+        self.log_start(
+            "pydantic_ai_vision",
+            model=model_name,
+            image_media_type=image.media_type,
+        )
+        self.log_io(direction="input", prompt=prompt, image_bytes=len(image.data))
         agent = self._build_agent(
             system_prompt=system_prompt,
             model=model,
@@ -127,7 +151,10 @@ class PydanticAIAgentProvider:
         )
         image_prompt: list[UserContent] = [prompt, ImageUrl(url=image.as_data_url(), media_type=image.media_type)]
         run_result, elapsed_seconds = self._run(agent, image_prompt)
-        return self._build_response(run_result, model or self._model, elapsed_seconds)
+        response = self._build_response(run_result, model or self._model, elapsed_seconds)
+        self.log_io(direction="output", model=response.model, content=response.content)
+        self.log_end("pydantic_ai_vision", elapsed_seconds=elapsed_seconds)
+        return response
 
     def _build_agent(
         self,

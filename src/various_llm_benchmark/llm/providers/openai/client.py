@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
 from collections.abc import Mapping
 
 from various_llm_benchmark.llm.protocol import LLMClient
+from various_llm_benchmark.logger import BaseComponent
 from various_llm_benchmark.models import (
     ChatMessage,
     ImageInput,
@@ -48,7 +49,7 @@ def _create_response(client: OpenAI, params: OpenAIRequestParams) -> Any:
     return create(**params)
 
 
-class OpenAILLMClient(LLMClient):
+class OpenAILLMClient(LLMClient, BaseComponent):
     """Adapter for OpenAI Responses API."""
 
     def __init__(self, client: OpenAI, default_model: str, *, temperature: float = 0.7) -> None:
@@ -66,11 +67,14 @@ class OpenAILLMClient(LLMClient):
         verbosity: Verbosity | None = None,
     ) -> LLMResponse:
         """Generate a completion without history."""
+        resolved_model = model or self._default_model
+        self.log_start("openai_generate", model=resolved_model)
+        self.log_io(direction="input", prompt=prompt)
         start = perf_counter()
         completion = _create_response(
             self._client,
             _build_request_kwargs(
-                model or self._default_model,
+                resolved_model,
                 prompt,
                 self._temperature,
                 reasoning_effort,
@@ -79,7 +83,10 @@ class OpenAILLMClient(LLMClient):
         )
         elapsed_seconds = perf_counter() - start
         content = _extract_content(completion.output)
-        return _build_response(completion, content, elapsed_seconds)
+        result = _build_response(completion, content, elapsed_seconds)
+        self.log_io(direction="output", model=result.model, content=result.content)
+        self.log_end("openai_generate", elapsed_seconds=elapsed_seconds)
+        return result
 
     def chat(
         self,
@@ -90,6 +97,8 @@ class OpenAILLMClient(LLMClient):
         verbosity: Verbosity | None = None,
     ) -> LLMResponse:
         """Generate a completion using chat messages."""
+        resolved_model = model or self._default_model
+        self.log_start("openai_chat", model=resolved_model, message_count=len(messages))
         openai_messages: list[dict[str, str]] = [
             {"role": msg.role, "content": msg.content} for msg in messages
         ]
@@ -98,7 +107,7 @@ class OpenAILLMClient(LLMClient):
         completion = _create_response(
             self._client,
             _build_request_kwargs(
-                model or self._default_model,
+                resolved_model,
                 openai_input,
                 self._temperature,
                 reasoning_effort,
@@ -107,7 +116,10 @@ class OpenAILLMClient(LLMClient):
         )
         elapsed_seconds = perf_counter() - start
         content = _extract_content(completion.output)
-        return _build_response(completion, content, elapsed_seconds)
+        result = _build_response(completion, content, elapsed_seconds)
+        self.log_io(direction="output", model=result.model, content=result.content)
+        self.log_end("openai_chat", elapsed_seconds=elapsed_seconds)
+        return result
 
     def vision(
         self,
@@ -120,7 +132,14 @@ class OpenAILLMClient(LLMClient):
         verbosity: Verbosity | None = None,
     ) -> LLMResponse:
         """Generate a response that combines text prompts and image data."""
+        resolved_model = model or self._default_model
         text_prompt = _merge_prompt(prompt, system_prompt)
+        self.log_start(
+            "openai_vision",
+            model=resolved_model,
+            image_media_type=image.media_type,
+        )
+        self.log_io(direction="input", prompt=text_prompt, image_bytes=len(image.data))
         openai_input = cast(
             "ResponseInputParam",
             [
@@ -137,7 +156,7 @@ class OpenAILLMClient(LLMClient):
         completion = _create_response(
             self._client,
             _build_request_kwargs(
-                model or self._default_model,
+                resolved_model,
                 openai_input,
                 self._temperature,
                 reasoning_effort,
@@ -146,7 +165,10 @@ class OpenAILLMClient(LLMClient):
         )
         elapsed_seconds = perf_counter() - start
         content = _extract_content(completion.output)
-        return _build_response(completion, content, elapsed_seconds)
+        result = _build_response(completion, content, elapsed_seconds)
+        self.log_io(direction="output", model=result.model, content=result.content)
+        self.log_end("openai_vision", elapsed_seconds=elapsed_seconds)
+        return result
 
 
 def _build_request_kwargs(

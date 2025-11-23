@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
+from unittest.mock import MagicMock, call
 
 from various_llm_benchmark.agents.providers import openai_agents
 
@@ -89,3 +90,30 @@ def test_chat_converts_messages() -> None:
         {"role": "system", "content": "sys"},
         {"role": "user", "content": "question"},
     ]
+
+
+def test_complete_logs_structured_events(monkeypatch: Any) -> None:
+    """OpenAI Agents provider should emit start, IO, and end logs."""
+    times = iter([1.0, 2.0])
+    monkeypatch.setattr(openai_agents, "perf_counter", lambda: next(times))
+
+    logger = MagicMock()
+    run_function = RecordingRunFunction(cast("RunResult", StubRunResult("done")))
+    provider = OpenAIAgentsProvider(
+        api_key="dummy",
+        model="gpt-4o-mini",
+        instructions="be concise",
+        run_function=run_function,
+    )
+    provider.logger = logger
+
+    provider.complete("ping")
+
+    expected_calls = [
+        call("start", action="openai_agents_complete", model="gpt-4o-mini"),
+        call("io", direction="input", prompt="ping"),
+        call("io", direction="output", model="gpt-4o-mini", content="done"),
+        call("end", action="openai_agents_complete", elapsed_seconds=1.0),
+    ]
+    for expected in expected_calls:
+        assert expected in logger.info.call_args_list
