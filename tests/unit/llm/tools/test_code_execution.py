@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import cast
 
 import pytest
+
+from google.genai import types as genai_types
 
 from various_llm_benchmark.llm.tools.builtin_memory import reset_store
 from various_llm_benchmark.llm.tools.code_execution import (
@@ -86,13 +87,13 @@ def test_payload_overrides_are_used_for_providers() -> None:
     anthropic_payload = to_anthropic_tools_payload([code_tool])
     gemini_payload = to_gemini_tools_payload([code_tool])
 
-    first_openai = openai_payload[0]
-    openai_function = cast("dict[str, object]", first_openai["function"])
-    assert first_openai["type"] == "function"
-    assert openai_function["name"] == "code-execute"
-    first_anthropic = anthropic_payload[0]
-    assert first_anthropic["name"] == "code-execute"
-    declarations = cast("list[object]", gemini_payload[0]["function_declarations"])
-    first_declaration = cast("dict[str, object]", declarations[0])
-    assert first_declaration["name"] == "code-execute"
+    assert openai_payload == [{"type": "code_interpreter"}]
+    assert anthropic_payload == [
+        {"type": "code_execution_20250825", "name": "code_execution"},
+    ]
+    assert len(gemini_payload) == 1
+    gemini_tool = gemini_payload[0]
+    assert isinstance(gemini_tool, genai_types.Tool)
+    assert gemini_tool.code_execution is not None
+    assert isinstance(gemini_tool.code_execution, genai_types.ToolCodeExecution)
 

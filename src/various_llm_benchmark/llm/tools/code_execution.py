@@ -10,7 +10,11 @@ import runpy
 import tempfile
 from pathlib import Path
 
+from google.genai import types as genai_types
+
 from various_llm_benchmark.llm.tools.registry import (
+    CODE_EXECUTION_TAG,
+    NativeToolType,
     ToolCategory,
     ToolRegistration,
     get_tool,
@@ -150,21 +154,12 @@ def run_code(
     }
 
 
-def _build_provider_overrides(
-    schema: dict[str, object], *, name: str, description: str,
-) -> dict[str, dict[str, object]]:
+def _build_provider_overrides() -> dict[str, object]:
     """Construct provider-specific function declarations for registration."""
     return {
-        "openai": {
-            "type": "function",
-            "function": {"name": name, "description": description, "parameters": schema},
-        },
-        "anthropic": {"name": name, "description": description, "input_schema": schema},
-        "gemini": {
-            "function_declarations": [
-                {"name": name, "description": description, "parameters": schema},
-            ],
-        },
+        "openai": {"type": "code_interpreter"},
+        "anthropic": {"type": "code_execution_20250825", "name": "code_execution"},
+        "gemini": genai_types.Tool(code_execution=genai_types.ToolCodeExecution()),
     }
 
 
@@ -204,10 +199,11 @@ def _register_tool() -> None:
         name="code-execute",
         description=description,
         input_schema=schema,
-        tags={"code", "execution"},
-        provider_overrides=_build_provider_overrides(schema, name="code-execute", description=description),
+        native_type=NativeToolType.CODE_EXECUTION,
+        provider_overrides=_build_provider_overrides(),
         handler=run_code,
         category=ToolCategory.BUILTIN,
+        tags={"code", "execution", CODE_EXECUTION_TAG},
     )
     try:
         register_tool(registration)
