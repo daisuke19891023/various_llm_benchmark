@@ -64,7 +64,11 @@ uv run various-llm-benchmark dspy complete "簡潔に要約してください"
 uv run various-llm-benchmark dspy chat "次の方針を考えて" --light-model \
   --history "system:箇条書きで提案してください" \
   --history "user:進捗を整理したい"
+uv run various-llm-benchmark dspy optimize ./datasets/prompt_tuning.jsonl \
+  --max-bootstrapped-demos 4 --num-candidates 6
 ```
+
+`dspy optimize`はJSONL形式(`{"input": "ユーザー入力", "target": "期待する出力"}`)のデータセットを読み込み、DsPyの`BootstrapFewShotWithRandomSearch`で少数ショットのデモを探索してプロンプトを自動調整します。`--max-bootstrapped-demos`や`--num-candidates`で探索の規模を制御できます。
 
 ### Agent (Agno)
 ```bash
