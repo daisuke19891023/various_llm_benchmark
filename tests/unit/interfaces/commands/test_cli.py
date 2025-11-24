@@ -6,9 +6,10 @@ from typing import TYPE_CHECKING
 from typer.testing import CliRunner
 
 from various_llm_benchmark.interfaces.cli import app
-from various_llm_benchmark.models import ChatMessage, LLMResponse
+from various_llm_benchmark.models import ChatMessage, LLMResponse, MediaInput
 
 if TYPE_CHECKING:
+    from pathlib import Path
     import pytest
 
 runner = CliRunner()
@@ -359,6 +360,55 @@ def test_gemini_chat_accepts_thinking_level(monkeypatch: pytest.MonkeyPatch) -> 
     assert result.exit_code == 0
     assert recorded["thinking_level"] == "high"
     assert isinstance(recorded.get("messages"), list)
+
+
+def test_gemini_multimodal(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Gemini multimodal command should load media and apply system prompt."""
+    recorded_media: list[list[MediaInput]] = []
+    recorded_system: list[str | None] = []
+    recorded_thinking: list[str | None] = []
+
+    def multimodal(
+        prompt: str,
+        media: list[MediaInput],
+        *,
+        model: str | None = None,
+        system_prompt: str | None = None,
+        thinking_level: str | None = None,
+    ) -> LLMResponse:
+        del prompt
+        recorded_media.append(media)
+        recorded_system.append(system_prompt)
+        recorded_thinking.append(thinking_level)
+        return LLMResponse(content=str(len(media)), model=model or "g", raw={"source": "test"})
+
+    def fake_client() -> SimpleNamespace:
+        return SimpleNamespace(multimodal=multimodal)
+
+    def fake_reader(path: Path) -> MediaInput:
+        return MediaInput(media_type="audio/wav", data=path.name)
+
+    monkeypatch.setattr("various_llm_benchmark.interfaces.commands.gemini._client", fake_client)
+    monkeypatch.setattr(
+        "various_llm_benchmark.interfaces.commands.gemini.read_audio_or_video_file",
+        fake_reader,
+    )
+
+    media_file = tmp_path / "sound.wav"
+    media_file.write_bytes(b"data")
+
+    result = runner.invoke(
+        app,
+        ["gemini", "multimodal", "hi", str(media_file), "--thinking-level", "base"],
+        catch_exceptions=False,
+    )
+
+    assert result.exit_code == 0
+    assert recorded_media[0][0].data == "sound.wav"
+    assert recorded_system[0] is not None
+    assert recorded_system[0].startswith("You are a concise and reliable assistant powered by Gemini")
+    assert recorded_thinking[0] == "base"
+    assert result.stdout.strip() == "1"
 
 
 def test_dspy_chat(monkeypatch: pytest.MonkeyPatch) -> None:
