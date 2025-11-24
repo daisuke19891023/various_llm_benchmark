@@ -1,21 +1,22 @@
-FROM postgres:16
+FROM mcr.microsoft.com/devcontainers/python:1-3.13-bullseye
 
-RUN set -eux; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends \
-        ca-certificates \
-        curl \
-        gnupg; \
-    curl -fsSL https://packages.groonga.org/debian/groonga-archive-keyring.gpg \
-        -o /usr/share/keyrings/groonga-archive-keyring.gpg; \
-    echo "deb [signed-by=/usr/share/keyrings/groonga-archive-keyring.gpg] https://packages.groonga.org/debian/ bookworm main" \
-        > /etc/apt/sources.list.d/groonga.list; \
-    echo "deb [signed-by=/usr/share/keyrings/groonga-archive-keyring.gpg] https://packages.groonga.org/debian/ bookworm-pgdg main" \
-        >> /etc/apt/sources.list.d/groonga.list; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends \
-        postgresql-16-pgvector \
-        postgresql-16-pgroonga; \
-    rm -rf /var/lib/apt/lists/*
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
-COPY docker/initdb.d /docker-entrypoint-initdb.d
+# Install additional OS packages and Node.js 20
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get update && export DEBIAN_FRONTEND=noninteractive \
+    && apt-get -y install --no-install-recommends libpq-dev nodejs \
+    && apt-get clean -y && rm -rf /var/lib/apt/lists/*
+
+# Install global npm packages
+RUN npm install -g @google/gemini-cli
+
+# Set working directory
+WORKDIR /workspace
+
+# Copy dependency files
+COPY pyproject.toml uv.lock ./
+
+# Install dependencies
+RUN uv sync --frozen

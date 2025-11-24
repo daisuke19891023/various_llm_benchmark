@@ -1,0 +1,19 @@
+{
+    "name": "Various LLM Benchmark",
+    "dockerComposeFile": "../docker-compose.yml",
+    "service": "app",
+    "workspaceFolder": "/workspace",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "charliermarsh.ruff",
+                "tamasfe.even-better-toml",
+                "ms-python.vscode-pylance",
+                "njpwerner.autodocstring",
+                "streetsidesoftware.code-spell-checker"
+            ]
+        }
+    },
+    "postCreateCommand": "bash .devcontainer/post_create.sh"
+}

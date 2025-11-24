@@ -3,12 +3,53 @@
 TyperベースのCLIで複数のLLMやエージェントフレームワークを試すためのサンドボックスです。OpenAI(Responses API)とAnthropic(Claude)に加えてGeminiのシンプルなテキスト生成と対話履歴付き応答、Agnoによるエージェント呼び出し、OpenAI Agents SDKによるエージェント呼び出し、Google ADKによるエージェント呼び出し、組み込みWeb検索ツールの呼び出し(OpenAI/Claude/Gemini)をサポートしています。
 
 ## セットアップ
-1. 依存関係をインストールします。
+
+本プロジェクトは `uv` を使用して依存関係を管理しています。Windows (PowerShell) および Ubuntu (Bash) でのセットアップ手順は以下の通りです。
+
+### 前提条件
+- **Python**: 3.13以上
+- **uv**: [インストール方法](https://docs.astral.sh/uv/getting-started/installation/)
+- **Docker**: PostgreSQL (pgvector/PGroonga) を利用する場合に必要
+
+### 手順
+
+1. **リポジトリのクローンと移動**
+   ```bash
+   git clone <repository-url>
+   cd various-llm-benchmark
+   ```
+
+2. **依存関係のインストール**
    ```bash
    uv sync --extra dev
    ```
-2. `.env.example`を参考に`.env`を作成し、各APIキーを設定します。
-3. PostgreSQLによるベクトル/全文検索を利用する場合は、以下も設定します。
+
+3. **環境変数の設定**
+   `.env.example` をコピーして `.env` を作成し、各APIキーを設定してください。
+
+   **Windows (PowerShell):**
+   実行ポリシーのエラーが出る場合は、以下のバッチファイルをダブルクリックするか、コマンドを実行してください。
+   ```cmd
+   .\setup.bat
+   ```
+   または、以下のコマンドで一時的に実行ポリシーを変更して実行します。
+   ```powershell
+   Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+   .\setup.ps1
+   ```
+
+   **Ubuntu (Bash):**
+   ```bash
+   bash setup.sh
+   ```
+
+4. **データベースの起動 (任意)**
+   ベクトル検索や全文検索を利用する場合は、DockerでPostgreSQLを起動します。
+   ```bash
+   docker compose up -d db
+   ```
+
+   **PostgreSQL設定詳細 (.env):**
    - `POSTGRES_CONNECTION_STRING`: 接続文字列 (例: `postgresql://user:password@localhost:5432/dbname`)
    - `POSTGRES_SCHEMA`: 利用するスキーマ名 (デフォルト: `public`)
    - `PGVECTOR_TABLE_NAME` / `PGROONGA_TABLE_NAME`: 各拡張で利用するテーブル名
@@ -17,7 +58,17 @@ TyperベースのCLIで複数のLLMやエージェントフレームワークを
    - 埋め込みモデル: `OPENAI_EMBEDDING_MODEL` / `OPENAI_EMBEDDING_MODEL_LIGHT` / `GOOGLE_EMBEDDING_MODEL` /
      `VOYAGE_EMBEDDING_MODEL` (後方互換として`EMBEDDING_MODEL`も指定可能)
    - Pydantic AIを利用する場合は`PYDANTIC_AI_API_KEY`や`PYDANTIC_AI_MODEL` / `PYDANTIC_AI_LIGHT_MODEL`を必要に応じて上書きしてください。
-   - Dockerでpgvector + PGroongaを起動する場合は`docker-compose.yml`を利用できます (`docker compose up -d db`)
+
+5. **動作確認**
+   ```bash
+   uv run various-llm-benchmark --help
+   ```
+
+### Dev Container (推奨)
+VS CodeとDockerがインストールされている場合、Dev Containerを利用すると環境構築が自動化されます。
+1. VS Codeでプロジェクトを開く。
+2. 左下の緑色のアイコンをクリックし、"Reopen in Container" を選択。
+3. 自動的に依存関係がインストールされ、PostgreSQLも利用可能な状態で起動します。
 
 ## プロンプト管理
 - システムプロンプトは`src/various_llm_benchmark/prompts/`以下のYAMLで管理します。
