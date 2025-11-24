@@ -1,0 +1,8 @@
+@echo off
+powershell -ExecutionPolicy Bypass -File .\setup.ps1
+if %errorlevel% neq 0 (
+    echo Setup failed with error code %errorlevel%
+    pause
+    exit /b %errorlevel%
+)
+pause
