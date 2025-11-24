@@ -114,10 +114,11 @@ class GeminiLLMClient(LLMClient, BaseComponent):
         image: ImageInput,
         *,
         model: str | None = None,
+        system_prompt: str | None = None,
         thinking_level: str | None = None,
-        **kwargs: Any,
     ) -> LLMResponse:
         """Generate a response that includes image context."""
+        del system_prompt  # Gemini doesn't use system_prompt in vision
         resolved_model = model or self._default_model
         self.log_start(
             "gemini_vision",
@@ -170,7 +171,6 @@ class GeminiLLMClient(LLMClient, BaseComponent):
         *,
         model: str | None = None,
         thinking_level: str | None = None,
-        **kwargs: Any,
     ) -> LLMResponse:
         """Generate a response that includes audio or video context."""
         if not media:

@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any, Protocol, cast
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from pydantic_ai import RunContext
     from pydantic_ai.messages import (
         ModelMessage,
         UserContent,

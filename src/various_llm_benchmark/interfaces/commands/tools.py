@@ -6,9 +6,9 @@ from typing import Literal
 import typer
 from rich.console import Console
 
-from various_llm_benchmark.llm.tools.registry import ToolCategory
-from various_llm_benchmark.interfaces.commands.web_search_clients import resolve_web_search_client
 from various_llm_benchmark.interfaces.commands.retriever_clients import resolve_retriever_client
+from various_llm_benchmark.interfaces.commands.web_search_clients import resolve_web_search_client
+from various_llm_benchmark.llm.tools.registry import ToolCategory
 
 ProviderName = Literal["openai", "anthropic", "gemini"]
 RetrieverProviderName = Literal["openai", "google", "voyage"]

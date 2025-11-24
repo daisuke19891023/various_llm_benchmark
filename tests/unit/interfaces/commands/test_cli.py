@@ -237,7 +237,7 @@ def test_claude_complete(monkeypatch: pytest.MonkeyPatch) -> None:
             captured.append(str(thinking))
         return LLMResponse(content=f"ok:{prompt}", model=model or "m", raw={"source": "test"})
 
-    def fake_client(extended_thinking: bool = False) -> SimpleNamespace:
+    def fake_client(extended_thinking: bool = False) -> SimpleNamespace:  # noqa: ARG001
         return SimpleNamespace(generate=generate)
 
     monkeypatch.setattr("various_llm_benchmark.interfaces.commands.claude._client", fake_client)
@@ -269,7 +269,7 @@ def test_claude_chat(monkeypatch: pytest.MonkeyPatch) -> None:
         recorded_thinking.append(thinking)
         return LLMResponse(content=str(len(messages)), model=model or "m", raw={"source": "test"})
 
-    def fake_client(extended_thinking: bool = False) -> SimpleNamespace:
+    def fake_client(extended_thinking: bool = False) -> SimpleNamespace:  # noqa: ARG001
         return SimpleNamespace(chat=chat)
 
     monkeypatch.setattr("various_llm_benchmark.interfaces.commands.claude._client", fake_client)
@@ -369,7 +369,6 @@ def test_gemini_chat_accepts_thinking_level(monkeypatch: pytest.MonkeyPatch) -> 
 def test_gemini_multimodal(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Gemini multimodal command should load media and apply system prompt."""
     recorded_media: list[list[MediaInput]] = []
-    recorded_system: list[str | None] = []
     recorded_thinking: list[str | None] = []
 
     def multimodal(

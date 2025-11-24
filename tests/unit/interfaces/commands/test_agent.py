@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any
 
 from typer.testing import CliRunner
 
-from various_llm_benchmark.agents.providers.agno import ProviderName
 from various_llm_benchmark.interfaces import cli
 from various_llm_benchmark.interfaces.commands import agent as agent_cmd
 from various_llm_benchmark.llm.tools.registry import ToolCategory
@@ -14,6 +13,8 @@ from various_llm_benchmark.models import ChatMessage, LLMResponse
 
 if TYPE_CHECKING:
     import pytest
+
+    from various_llm_benchmark.agents.providers.agno import ProviderName
 
 runner = CliRunner()
 

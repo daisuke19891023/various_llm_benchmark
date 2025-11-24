@@ -18,7 +18,6 @@ from various_llm_benchmark.interfaces.commands.retriever_clients import resolve_
 from various_llm_benchmark.interfaces.commands.web_search_clients import resolve_web_search_client
 from various_llm_benchmark.llm.tools.registry import ToolCategory
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
-from various_llm_benchmark.settings import settings
 
 agent_app = typer.Typer(help="Agnoエージェントを呼び出します。")
 console = Console()
@@ -90,6 +89,7 @@ def _prompt_template() -> PromptTemplate:
 
 def _create_provider(*, use_light_model: bool = False) -> AgnoAgentProvider:
     from various_llm_benchmark.agents.providers import AgnoAgentProvider
+    from various_llm_benchmark.settings import settings
 
     prompt_template = _prompt_template()
     openai_model = settings.openai_light_model if use_light_model else settings.openai_model

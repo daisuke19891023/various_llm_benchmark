@@ -10,7 +10,6 @@ from various_llm_benchmark.interfaces.commands.common import build_messages
 from various_llm_benchmark.llm.providers.gemini.client import GeminiLLMClient
 from various_llm_benchmark.media.audio_video import read_audio_or_video_file
 from various_llm_benchmark.media.images import read_image_file
-from various_llm_benchmark.models import LLMResponse
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
 from various_llm_benchmark.settings import settings
 
@@ -101,7 +100,7 @@ def gemini_vision(
     resolved_path = Path(image_path)
     image_input = read_image_file(resolved_path)
     with console.status("Geminiで画像を解析中...", spinner="dots"):
-        response: LLMResponse = _client().vision(
+        response = _client().vision(
             prompt,
             image_input,
             model=model,
@@ -120,7 +119,7 @@ def gemini_multimodal(
     """Analyze audio or video with a Gemini model."""
     media_inputs = [read_audio_or_video_file(path) for path in media_paths]
     with console.status("Geminiでメディアを解析中...", spinner="dots"):
-        response: LLMResponse = _client().multimodal(
+        response = _client().multimodal(
             prompt,
             media_inputs,
             model=model,
