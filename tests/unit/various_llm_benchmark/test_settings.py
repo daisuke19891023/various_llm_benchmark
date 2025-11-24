@@ -28,6 +28,9 @@ def test_validate_keys_require_postgres_when_enabled(monkeypatch: pytest.MonkeyP
     """pgvector有効時にPostgreSQL関連のキーが必須になること."""
     _set_api_keys(monkeypatch)
     monkeypatch.setenv("ENABLE_PGVECTOR", "true")
+    monkeypatch.setenv("POSTGRES_CONNECTION_STRING", "")
+    monkeypatch.setenv("POSTGRES_SCHEMA", "")
+    monkeypatch.setenv("PGVECTOR_TABLE_NAME", "")
 
     with pytest.raises(ValueError, match="POSTGRES_CONNECTION_STRING") as exc_info:
         Settings()

@@ -188,16 +188,18 @@ class PydanticAIAgentProvider(BaseComponent):
         return [self._wrap_tool(registration) for registration in registrations]
 
     def _wrap_tool(self, registration: ToolRegistration) -> Tool:
+        from pydantic_ai import RunContext
         from pydantic_ai.tools import Tool
 
         handler = registration.handler
         takes_ctx = self._handler_accepts_run_context(handler)
 
-        def tool_fn(run_context: RunContext, **kwargs: Any) -> object:
+        def tool_fn(run_context: Any, **kwargs: Any) -> object:
             if takes_ctx:
                 return handler(run_context, **kwargs)
             return handler(**kwargs)
 
+        tool_fn.__annotations__["run_context"] = RunContext
         return Tool(tool_fn, name=registration.name, description=registration.description)
 
     def _handler_accepts_run_context(self, handler: Callable[..., object]) -> bool:

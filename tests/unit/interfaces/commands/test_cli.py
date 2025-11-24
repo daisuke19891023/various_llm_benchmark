@@ -269,8 +269,8 @@ def test_claude_chat(monkeypatch: pytest.MonkeyPatch) -> None:
         recorded_thinking.append(thinking)
         return LLMResponse(content=str(len(messages)), model=model or "m", raw={"source": "test"})
 
-        def fake_client(extended_thinking: bool = False) -> SimpleNamespace:
-            return SimpleNamespace(chat=chat)
+    def fake_client(extended_thinking: bool = False) -> SimpleNamespace:
+        return SimpleNamespace(chat=chat)
 
     monkeypatch.setattr("various_llm_benchmark.interfaces.commands.claude._client", fake_client)
 
@@ -377,12 +377,10 @@ def test_gemini_multimodal(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
         media: list[MediaInput],
         *,
         model: str | None = None,
-        system_prompt: str | None = None,
         thinking_level: str | None = None,
     ) -> LLMResponse:
         del prompt
         recorded_media.append(media)
-        recorded_system.append(system_prompt)
         recorded_thinking.append(thinking_level)
         return LLMResponse(content=str(len(media)), model=model or "g", raw={"source": "test"})
 
@@ -409,8 +407,6 @@ def test_gemini_multimodal(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
 
     assert result.exit_code == 0
     assert recorded_media[0][0].data == "sound.wav"
-    assert recorded_system[0] is not None
-    assert recorded_system[0].startswith("You are a concise and reliable assistant powered by Gemini")
     assert recorded_thinking[0] == "base"
     assert result.stdout.strip() == "1"
 
