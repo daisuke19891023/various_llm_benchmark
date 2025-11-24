@@ -4,7 +4,9 @@ volumes:
 
 services:
   db:
-    build: .
+    build:
+      context: ./docker
+      dockerfile: postgres.Dockerfile
     container_name: various-llm-benchmark-postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
