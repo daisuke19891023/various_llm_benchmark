@@ -109,6 +109,18 @@ def test_openai_payload_supports_functions_and_web_search() -> None:
     assert payload[1] == {"type": "web_search"}
 
 
+def test_openai_payload_enables_free_form_custom_tools() -> None:
+    """Custom tools can opt into GPT-5 free-form tool calling."""
+    payload = to_openai_tools_payload(
+        [_function_tool()], free_form_custom_tools=True,
+    )
+
+    first_tool = cast("dict[str, Any]", payload[0])
+
+    assert first_tool["type"] == "function"
+    assert first_tool["strict"] is False
+
+
 def test_anthropic_payload_converts_tool_fields() -> None:
     """Anthropic payload should map schema fields and web search."""
     payload = to_anthropic_tools_payload([_function_tool(), _web_search_tool()])

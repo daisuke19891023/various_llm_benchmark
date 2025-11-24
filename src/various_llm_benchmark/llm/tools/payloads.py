@@ -38,8 +38,17 @@ def _function_payload(tool: ToolRegistration) -> dict[str, object]:
     }
 
 
-def to_openai_tools_payload(tools: Sequence[ToolRegistration]) -> list[dict[str, object]]:
-    """Convert tool registrations to OpenAI Responses `tools` payload."""
+def to_openai_tools_payload(
+    tools: Sequence[ToolRegistration], *, free_form_custom_tools: bool = False,
+) -> list[dict[str, object]]:
+    """Convert tool registrations to OpenAI Responses `tools` payload.
+
+    Args:
+        tools: Registered tools to convert.
+        free_form_custom_tools: When ``True``, mark custom tools so GPT-5 can
+            emit free-form tool calls without JSON wrapping.
+
+    """
     payload: list[dict[str, object]] = []
     for tool in tools:
         override = tool.provider_overrides.get("openai")
@@ -59,6 +68,7 @@ def to_openai_tools_payload(tools: Sequence[ToolRegistration]) -> list[dict[str,
             {
                 "type": "function",
                 "function": _function_payload(tool),
+                "strict": not free_form_custom_tools,
             },
         )
     return payload
@@ -125,14 +135,22 @@ def to_gemini_tools_payload(tools: Sequence[ToolRegistration]) -> list[genai_typ
     return payload
 
 
-def to_agno_tools_payload(tools: Sequence[ToolRegistration]) -> list[dict[str, object]]:
+def to_agno_tools_payload(
+    tools: Sequence[ToolRegistration], *, free_form_custom_tools: bool = False,
+) -> list[dict[str, object]]:
     """Return tool payloads suitable for Agno agents."""
-    return to_openai_tools_payload(tools)
+    return to_openai_tools_payload(
+        tools, free_form_custom_tools=free_form_custom_tools,
+    )
 
 
-def to_agents_sdk_tools_payload(tools: Sequence[ToolRegistration]) -> list[dict[str, object]]:
+def to_agents_sdk_tools_payload(
+    tools: Sequence[ToolRegistration], *, free_form_custom_tools: bool = False,
+) -> list[dict[str, object]]:
     """Return tool payloads suitable for the OpenAI Agents SDK."""
-    return to_openai_tools_payload(tools)
+    return to_openai_tools_payload(
+        tools, free_form_custom_tools=free_form_custom_tools,
+    )
 
 
 def to_google_adk_tools_payload(tools: Sequence[ToolRegistration]) -> list[genai_types.Tool]:
