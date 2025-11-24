@@ -24,4 +24,3 @@ def read_image_file(image_path: Path) -> ImageInput:
     data = resolved_path.read_bytes()
     encoded = base64.b64encode(data).decode()
     return ImageInput(media_type=media_type, data=encoded)
-

@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping, Sequence
-from functools import partial
-from enum import StrEnum
 import math
 import time
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from enum import StrEnum
+from functools import partial
 from typing import TYPE_CHECKING, Any, Protocol, Self, cast
 
-from google.genai import Client
-from google.genai.types import HttpOptions
-from openai import APIConnectionError, APITimeoutError, OpenAI, RateLimitError
 from pydantic import BaseModel, Field
-from psycopg import Error as PsycopgError, sql
-from psycopg_pool import ConnectionPool, PoolTimeout
-from voyageai.client import Client as VoyageClient
+
+if TYPE_CHECKING:
+    from contextlib import AbstractContextManager
+
+    from openai.types import CreateEmbeddingResponse
+    from psycopg import sql
 
 from various_llm_benchmark.settings import settings
 
@@ -142,6 +142,8 @@ def create_postgres_pool(
         raise RetrieverError(msg)
 
     try:
+        from psycopg_pool import ConnectionPool
+
         pool = ConnectionPool(
             conninfo=connection_string,
             min_size=min_size,
@@ -201,14 +203,18 @@ def generate_embedding(
     for attempt in range(max_retries + 1):
         try:
             return provider_handler()
-        except (APITimeoutError, APIConnectionError, RateLimitError) as exc:
-            errors.append(exc)
-            if attempt >= max_retries:
-                msg = "Embedding request failed after retries."
-                raise RetrieverError(msg) from exc
-            time.sleep(backoff)
-            backoff *= 2
-        except Exception as exc:  # pragma: no cover - defensive guard
+        except Exception as exc:
+            from openai import APIConnectionError, APITimeoutError, RateLimitError
+
+            if isinstance(exc, (APITimeoutError, APIConnectionError, RateLimitError)):
+                errors.append(exc)
+                if attempt >= max_retries:
+                    msg = "Embedding request failed after retries."
+                    raise RetrieverError(msg) from exc
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            # defensive guard
             errors.append(exc)
             if attempt >= max_retries:
                 msg = "Embedding request failed unexpectedly."
@@ -256,14 +262,18 @@ def generate_embeddings_batch(
     for attempt in range(max_retries + 1):
         try:
             return handler()
-        except (APITimeoutError, APIConnectionError, RateLimitError) as exc:
-            errors.append(exc)
-            if attempt >= max_retries:
-                msg = "Batch embedding request failed after retries."
-                raise RetrieverError(msg) from exc
-            time.sleep(backoff)
-            backoff *= 2
-        except Exception as exc:  # pragma: no cover - defensive guard
+        except Exception as exc:
+            from openai import APIConnectionError, APITimeoutError, RateLimitError
+
+            if isinstance(exc, (APITimeoutError, APIConnectionError, RateLimitError)):
+                errors.append(exc)
+                if attempt >= max_retries:
+                    msg = "Batch embedding request failed after retries."
+                    raise RetrieverError(msg) from exc
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            # defensive guard
             errors.append(exc)
             if attempt >= max_retries:
                 msg = "Batch embedding request failed unexpectedly."
@@ -294,6 +304,8 @@ def pgvector_similarity_search(
     table_reference = _qualified_table(schema, table)
     similarity_threshold = threshold if threshold is not None else settings.search_score_threshold
     limit = top_k or settings.search_top_k
+    from psycopg import sql
+
     query = sql.SQL(
         "SELECT id, content, metadata, 1 - (embedding <=> %s::vector) AS score "
         "FROM {table} "
@@ -306,9 +318,14 @@ def pgvector_similarity_search(
         with pool.connection(timeout=timeout) as connection, connection.cursor() as cursor:
             cursor.execute(query, params)
             rows = cast("Sequence[RowRecord]", cursor.fetchall())
-    except (PoolTimeout, PsycopgError) as exc:
-        msg = "pgvector similarity search failed."
-        raise RetrieverError(msg) from exc
+    except Exception as exc:
+        from psycopg import Error as PsycopgError
+        from psycopg_pool import PoolTimeout
+
+        if isinstance(exc, (PoolTimeout, PsycopgError)):
+            msg = "pgvector similarity search failed."
+            raise RetrieverError(msg) from exc
+        raise
 
     documents: list[RetrievedDocument] = []
     for row in rows:
@@ -343,6 +360,8 @@ def pgroonga_full_text_search(
     table_reference = _qualified_table(schema, table)
     rank_threshold = threshold if threshold is not None else settings.search_score_threshold
     limit = top_k or settings.search_top_k
+    from psycopg import sql
+
     query = sql.SQL(
         "SELECT id, content, metadata, pgroonga_score(tableoid, ctid) AS score "
         "FROM {table} "
@@ -355,9 +374,14 @@ def pgroonga_full_text_search(
         with pool.connection(timeout=timeout) as connection, connection.cursor() as cursor:
             cursor.execute(query, params)
             rows = cast("Sequence[RowRecord]", cursor.fetchall())
-    except (PoolTimeout, PsycopgError) as exc:
-        msg = "PGroonga full-text search failed."
-        raise RetrieverError(msg) from exc
+    except Exception as exc:
+        from psycopg import Error as PsycopgError
+        from psycopg_pool import PoolTimeout
+
+        if isinstance(exc, (PoolTimeout, PsycopgError)):
+            msg = "PGroonga full-text search failed."
+            raise RetrieverError(msg) from exc
+        raise
 
     documents: list[RetrievedDocument] = []
     for row in rows:
@@ -419,15 +443,25 @@ def merge_ranked_results(
 
 
 def _generate_openai_embedding(
-    text: str, *, model: str | None, timeout: float, client: SupportsOpenAIClient | None,
+    text: str,
+    *,
+    model: str | None,
+    timeout: float,
+    client: SupportsOpenAIClient | None,
 ) -> list[float]:
     embedding_model = model or settings.embedding_model or settings.openai_embedding_model
     openai_client = cast(
         "SupportsOpenAIClient",
         client
-        or OpenAI(
-            api_key=settings.openai_api_key.get_secret_value(),
-            timeout=timeout,
+        or (
+            (  # noqa: PLC3002 - lazy import pattern
+                lambda: (
+                    __import__("openai").OpenAI(
+                        api_key=settings.openai_api_key.get_secret_value(),
+                        timeout=timeout,
+                    )
+                )
+            )()
         ),
     )
     response = cast(
@@ -442,15 +476,25 @@ def _generate_openai_embedding(
 
 
 def _generate_openai_embeddings_batch(
-    texts: Sequence[str], *, model: str | None, timeout: float, client: SupportsOpenAIClient | None,
+    texts: Sequence[str],
+    *,
+    model: str | None,
+    timeout: float,
+    client: SupportsOpenAIClient | None,
 ) -> list[list[float]]:
     embedding_model = model or settings.embedding_model or settings.openai_embedding_model
     openai_client = cast(
         "SupportsOpenAIClient",
         client
-        or OpenAI(
-            api_key=settings.openai_api_key.get_secret_value(),
-            timeout=timeout,
+        or (
+            (  # noqa: PLC3002 - lazy import pattern
+                lambda: (
+                    __import__("openai").OpenAI(
+                        api_key=settings.openai_api_key.get_secret_value(),
+                        timeout=timeout,
+                    )
+                )
+            )()
         ),
     )
     response = cast(
@@ -465,9 +509,16 @@ def _generate_openai_embeddings_batch(
 
 
 def _generate_google_embedding(
-    text: str, *, model: str | None, timeout: float, client: SupportsGoogleClient | None,
+    text: str,
+    *,
+    model: str | None,
+    timeout: float,
+    client: SupportsGoogleClient | None,
 ) -> list[float]:
     embedding_model = model or settings.embedding_model or settings.google_embedding_model
+    from google.genai import Client
+    from google.genai.types import HttpOptions
+
     http_options = HttpOptions(timeout=max(0, int(timeout)))
     genai_client = client or Client(
         api_key=settings.gemini_api_key.get_secret_value(),
@@ -481,7 +532,12 @@ def _generate_google_embedding(
 
 
 def _generate_google_embeddings_batch(
-    texts: Sequence[str], *, model: str | None, timeout: float, client: SupportsGoogleClient | None, max_retries: int,
+    texts: Sequence[str],
+    *,
+    model: str | None,
+    timeout: float,
+    client: SupportsGoogleClient | None,
+    max_retries: int,
 ) -> list[list[float]]:
     embeddings: list[list[float]] = []
     backoff: float = 0.1
@@ -498,21 +554,35 @@ def _generate_google_embeddings_batch(
                     ),
                 )
                 break
-            except (APITimeoutError, APIConnectionError, RateLimitError) as exc:
-                if current_retries >= max_retries:
-                    msg = f"Embedding request failed for item {index}"
-                    raise RetrieverError(msg) from exc
-                time.sleep(backoff)
-                backoff *= 2
-                current_retries += 1
+            except Exception as exc:
+                from openai import APIConnectionError, APITimeoutError, RateLimitError
+
+                if isinstance(exc, (APITimeoutError, APIConnectionError, RateLimitError)):
+                    if current_retries >= max_retries:
+                        msg = f"Embedding request failed for item {index}"
+                        raise RetrieverError(msg) from exc
+                    time.sleep(backoff)
+                    backoff *= 2
+                    current_retries += 1
+                    continue
+                raise
     return embeddings
 
 
 def _generate_voyage_embedding(
-    text: str, *, model: str | None, timeout: float, client: SupportsVoyageClient | None,
+    text: str,
+    *,
+    model: str | None,
+    timeout: float,
+    client: SupportsVoyageClient | None,
 ) -> list[float]:
     embedding_model = model or settings.embedding_model or settings.voyage_embedding_model
-    voyage_client = client or VoyageClient(api_key=settings.voyage_api_key.get_secret_value(), timeout=timeout)
+    if client:
+        voyage_client = client
+    else:
+        from voyageai.client import Client as VoyageClient
+
+        voyage_client = VoyageClient(api_key=settings.voyage_api_key.get_secret_value(), timeout=timeout)
     response = voyage_client.embed(
         texts=[text],
         model=embedding_model,
@@ -521,10 +591,19 @@ def _generate_voyage_embedding(
 
 
 def _generate_voyage_embeddings_batch(
-    texts: Sequence[str], *, model: str | None, timeout: float, client: SupportsVoyageClient | None,
+    texts: Sequence[str],
+    *,
+    model: str | None,
+    timeout: float,
+    client: SupportsVoyageClient | None,
 ) -> list[list[float]]:
     embedding_model = model or settings.embedding_model or settings.voyage_embedding_model
-    voyage_client = client or VoyageClient(api_key=settings.voyage_api_key.get_secret_value(), timeout=timeout)
+    if client:
+        voyage_client = client
+    else:
+        from voyageai.client import Client as VoyageClient
+
+        voyage_client = VoyageClient(api_key=settings.voyage_api_key.get_secret_value(), timeout=timeout)
     response = voyage_client.embed(
         texts=list(texts),
         model=embedding_model,
@@ -697,6 +776,8 @@ def _to_float_list(values: Iterable[float]) -> list[float]:
 
 def _qualified_table(schema: str, table: str) -> sql.Identifier:
     _validate_identifier(table, "table")
+    from psycopg import sql
+
     if schema:
         _validate_identifier(schema, "schema")
         return sql.Identifier(schema, table)

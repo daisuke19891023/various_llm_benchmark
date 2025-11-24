@@ -16,13 +16,13 @@ from various_llm_benchmark.llm.tools.payloads import (
 )
 from various_llm_benchmark.llm.tools.registry import (
     CODE_EXECUTION_TAG,
-    NativeToolType,
-    ToolCategory,
-    ToolRegistration,
     RETRIEVER_INPUT_SCHEMA,
     RETRIEVER_TAG,
     SHELL_TAG,
     WEB_SEARCH_TAG,
+    NativeToolType,
+    ToolCategory,
+    ToolRegistration,
 )
 
 
@@ -153,10 +153,7 @@ def test_agent_framework_helpers_delegate_to_llm_payloads() -> None:
     assert google_adk_tools[0].function_declarations is not None
     assert gemini_tools[0].function_declarations is not None
     assert google_adk_tools[0].function_declarations[0].name == "math-add"
-    assert (
-        google_adk_tools[0].function_declarations[0].name
-        == gemini_tools[0].function_declarations[0].name
-    )
+    assert google_adk_tools[0].function_declarations[0].name == gemini_tools[0].function_declarations[0].name
     assert google_adk_tools[1].google_search_retrieval is not None
     assert isinstance(google_adk_tools[1].google_search_retrieval, genai_types.GoogleSearchRetrieval)
 
@@ -232,4 +229,3 @@ def test_shell_tool_provider_override_is_honored() -> None:
     assert to_anthropic_tools_payload([shell_tool]) == [
         {"type": "bash", "name": "custom-shell"},
     ]
-

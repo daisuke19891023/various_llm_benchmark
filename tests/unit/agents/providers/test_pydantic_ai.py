@@ -4,8 +4,6 @@ from dataclasses import dataclass, field
 from typing import Any, TypedDict, cast
 from unittest.mock import MagicMock, call
 
-import various_llm_benchmark.agents.providers.pydantic_ai as pydantic_ai_module
-
 from pydantic_ai.messages import (
     ImageUrl,
     ModelRequest,
@@ -14,10 +12,11 @@ from pydantic_ai.messages import (
     TextPart,
 )
 from pydantic_ai.tools import Tool
+
+import various_llm_benchmark.agents.providers.pydantic_ai as pydantic_ai_module
 from various_llm_benchmark.agents.providers.pydantic_ai import PydanticAIAgentProvider
 from various_llm_benchmark.llm.tools.registry import ToolCategory, ToolRegistration
 from various_llm_benchmark.models import ChatMessage, ImageInput
-
 
 
 class RunRecord(TypedDict):
@@ -78,9 +77,7 @@ class StubToolAgent(StubAgent):
         tools: list[Tool] = list(cast("list[Tool]", self.kwargs.get("tools", [])))
         tool = cast("Any", tools[0]) if tools else None
         tool_callable = getattr(tool, "function", None) if tool is not None else None
-        tool_response = (
-            cast("str", tool_callable(object(), action="ping")) if callable(tool_callable) else "no-tools"
-        )
+        tool_response = cast("str", tool_callable(object(), action="ping")) if callable(tool_callable) else "no-tools"
         self.runs.append(run_kwargs)
         return StubRunResult(response=tool_response)
 

@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import MagicMock, call
 
 from various_llm_benchmark.agents.providers import openai_agents
-
 from various_llm_benchmark.agents.providers.openai_agents import OpenAIAgentsProvider
 from various_llm_benchmark.models import ChatMessage, LLMResponse
 

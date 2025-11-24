@@ -3,15 +3,17 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 from rich.console import Console
 
-from various_llm_benchmark.agents.providers import PydanticAIAgentProvider
+if TYPE_CHECKING:
+    from various_llm_benchmark.agents.providers import PydanticAIAgentProvider
+
+
 from various_llm_benchmark.interfaces.commands.common import build_messages
-from various_llm_benchmark.interfaces.commands.web_search_clients import resolve_web_search_client
 from various_llm_benchmark.llm.tools.registry import ToolCategory
-from various_llm_benchmark.media.images import read_image_file
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
 from various_llm_benchmark.settings import settings
 
@@ -60,6 +62,8 @@ def create_provider(
     temperature: float | None = None,
 ) -> PydanticAIAgentProvider:
     """Create a configured Pydantic AI provider instance."""
+    from various_llm_benchmark.agents.providers import PydanticAIAgentProvider
+
     pydantic_ai_key = settings.pydantic_ai_api_key.get_secret_value()
     openai_key = settings.openai_api_key.get_secret_value()
     if pydantic_ai_key:
@@ -67,11 +71,7 @@ def create_provider(
     if openai_key:
         os.environ.setdefault("OPENAI_API_KEY", openai_key)
 
-    resolved_model = model or (
-        settings.pydantic_ai_light_model
-        if use_light_model
-        else settings.pydantic_ai_model
-    )
+    resolved_model = model or (settings.pydantic_ai_light_model if use_light_model else settings.pydantic_ai_model)
     resolved_temperature = settings.default_temperature if temperature is None else temperature
     return PydanticAIAgentProvider(
         model=resolved_model,
@@ -89,7 +89,9 @@ def pydantic_ai_complete(
 ) -> None:
     """Pydantic AIで単発応答を生成します."""
     provider = create_provider(
-        model=model, use_light_model=light_model, temperature=temperature,
+        model=model,
+        use_light_model=light_model,
+        temperature=temperature,
     )
     with console.status("Pydantic AIで応答生成中...", spinner="dots"):
         response = provider.complete(prompt)
@@ -107,7 +109,9 @@ def pydantic_ai_chat(
     """履歴付きでPydantic AIの応答を生成します."""
     messages = build_messages(prompt, history or [], system_prompt=_prompt_template().system)
     provider = create_provider(
-        model=model, use_light_model=light_model, temperature=temperature,
+        model=model,
+        use_light_model=light_model,
+        temperature=temperature,
     )
     with console.status("Pydantic AIで履歴付き応答を生成中...", spinner="dots"):
         response = provider.chat(messages)
@@ -123,10 +127,14 @@ def pydantic_ai_vision(
     temperature: float | None = TEMPERATURE_OPTION,
 ) -> None:
     """Pydantic AIで画像入力を含めた応答を生成します."""
+    from various_llm_benchmark.media.images import read_image_file
+
     resolved_path = Path(image_path)
     image_input = read_image_file(resolved_path)
     provider = create_provider(
-        model=model, use_light_model=light_model, temperature=temperature,
+        model=model,
+        use_light_model=light_model,
+        temperature=temperature,
     )
     with console.status("Pydantic AIで画像を解析中...", spinner="dots"):
         response = provider.vision(prompt, image_input)
@@ -141,8 +149,12 @@ def pydantic_ai_web_search(
     category: ToolCategory = CATEGORY_OPTION,
 ) -> None:
     """OpenAI Web検索ツールをPydantic AI CLIから呼び出します."""
+    from various_llm_benchmark.interfaces.commands.web_search_clients import resolve_web_search_client
+
     search = resolve_web_search_client(
-        "openai", category=category, use_light_model=light_model,
+        "openai",
+        category=category,
+        use_light_model=light_model,
     )
     with console.status("Pydantic AI経由でWeb検索中...", spinner="dots"):
         response = search(prompt, model=model)

@@ -56,7 +56,9 @@ class DsPyLLMClient(LLMClient):
         self._lm_factory: LMFactory = lm_factory or _default_lm_factory
         self._lm_kwargs = lm_kwargs
         self._lm: SupportsDsPyLM = self._lm_factory(
-            model=default_model, temperature=temperature, **self._lm_kwargs,
+            model=default_model,
+            temperature=temperature,
+            **self._lm_kwargs,
         )
 
     def generate(self, prompt: str, *, model: str | None = None) -> LLMResponse:
@@ -72,9 +74,7 @@ class DsPyLLMClient(LLMClient):
     def chat(self, messages: list[ChatMessage], *, model: str | None = None) -> LLMResponse:
         """Generate a completion using chat-style messages."""
         lm = self._resolve_lm(model)
-        formatted_messages = [
-            {"role": msg.role, "content": msg.content} for msg in messages
-        ]
+        formatted_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
         raw_response = _call_forward(lm, prompt=None, messages=formatted_messages)
         outputs = _normalize_outputs(raw_response, getattr(lm, "model_type", "chat"))
         content = _extract_content(outputs)
@@ -98,7 +98,9 @@ class DsPyLLMClient(LLMClient):
         if model is None or model == self._default_model:
             return self._lm
         return self._lm_factory(
-            model=model, temperature=self._temperature, **self._lm_kwargs,
+            model=model,
+            temperature=self._temperature,
+            **self._lm_kwargs,
         )
 
 
@@ -196,7 +198,9 @@ def _extract_reasoning(item: object) -> list[str]:
 
 
 def _build_response_outputs(
-    text_outputs: list[str], tool_calls: list[object], reasoning: list[str],
+    text_outputs: list[str],
+    tool_calls: list[object],
+    reasoning: list[str],
 ) -> NormalizedOutputs:
     result: dict[str, object] = {}
     if text_outputs:

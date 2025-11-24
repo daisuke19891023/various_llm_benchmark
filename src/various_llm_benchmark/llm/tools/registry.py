@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
 import typing
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -97,10 +97,7 @@ def get_tool(tool_id: str, *, category: ToolCategory | None = None) -> ToolRegis
         raise KeyError(msg) from exc
 
     if category is not None and registration.category != category:
-        msg = (
-            f"Tool '{tool_id}' is registered under category '{registration.category}', "
-            f"not '{category}'."
-        )
+        msg = f"Tool '{tool_id}' is registered under category '{registration.category}', not '{category}'."
         raise LookupError(msg)
 
     return registration

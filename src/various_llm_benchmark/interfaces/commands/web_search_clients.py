@@ -5,25 +5,21 @@ from __future__ import annotations
 from functools import lru_cache, partial
 from typing import TYPE_CHECKING, Literal, Protocol, cast
 
-from anthropic import Anthropic
-from google.genai import Client
-from openai import OpenAI
+if TYPE_CHECKING:
+    from various_llm_benchmark.llm.tools.web_search import (
+        AnthropicWebSearchTool,
+        GeminiWebSearchTool,
+        OpenAIWebSearchTool,
+    )
+
 
 from various_llm_benchmark.llm.tools import ToolSelector
 from various_llm_benchmark.llm.tools.registry import (
+    WEB_SEARCH_TAG,
     NativeToolType,
     ToolCategory,
     ToolRegistration,
-    WEB_SEARCH_TAG,
     register_tool,
-)
-from various_llm_benchmark.llm.tools.web_search import (
-    AnthropicWebSearchTool,
-    GeminiWebSearchTool,
-    OpenAIWebSearchTool,
-    SupportsMessages,
-    SupportsResponses,
-    SupportsSearchModels,
 )
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
 from various_llm_benchmark.settings import settings
@@ -54,6 +50,7 @@ class WebSearchExecutor(Protocol):
     def __call__(self, prompt: str, *, model: str | None = None) -> LLMResponse:
         """Execute a search request."""
         ...
+
 
 WEB_SEARCH_INPUT_SCHEMA: dict[str, object] = {
     "type": "object",
@@ -87,6 +84,10 @@ def _gemini_prompt_template() -> PromptTemplate:
 @lru_cache(maxsize=2)
 def build_openai_web_search_tool(use_light_model: bool = False) -> OpenAIWebSearchTool:
     """Return a cached OpenAI web search caller."""
+    from openai import OpenAI
+
+    from various_llm_benchmark.llm.tools.web_search import OpenAIWebSearchTool, SupportsResponses
+
     client = cast("SupportsResponses", OpenAI(api_key=settings.openai_api_key.get_secret_value()))
     default_model = settings.openai_light_model if use_light_model else settings.openai_model
     return OpenAIWebSearchTool(
@@ -100,6 +101,10 @@ def build_openai_web_search_tool(use_light_model: bool = False) -> OpenAIWebSear
 @lru_cache(maxsize=2)
 def build_anthropic_web_search_tool(use_light_model: bool = False) -> AnthropicWebSearchTool:
     """Return a cached Anthropic web search caller."""
+    from anthropic import Anthropic
+
+    from various_llm_benchmark.llm.tools.web_search import AnthropicWebSearchTool, SupportsMessages
+
     client = cast("SupportsMessages", Anthropic(api_key=settings.anthropic_api_key.get_secret_value()))
     default_model = settings.anthropic_light_model if use_light_model else settings.anthropic_model
     return AnthropicWebSearchTool(
@@ -113,6 +118,10 @@ def build_anthropic_web_search_tool(use_light_model: bool = False) -> AnthropicW
 @lru_cache(maxsize=2)
 def build_gemini_web_search_tool(use_light_model: bool = False) -> GeminiWebSearchTool:
     """Return a cached Gemini web search caller."""
+    from google.genai import Client
+
+    from various_llm_benchmark.llm.tools.web_search import GeminiWebSearchTool, SupportsSearchModels
+
     client = cast("SupportsSearchModels", Client(api_key=settings.gemini_api_key.get_secret_value()))
     default_model = settings.gemini_light_model if use_light_model else settings.gemini_model
     return GeminiWebSearchTool(
@@ -147,21 +156,30 @@ def _register_web_search_tool(
 
 
 def _openai_web_search(
-    prompt: str, *, model: str | None = None, use_light_model: bool = False,
+    prompt: str,
+    *,
+    model: str | None = None,
+    use_light_model: bool = False,
 ) -> LLMResponse:
     tool = build_openai_web_search_tool(use_light_model=use_light_model)
     return tool.search(prompt, model=model)
 
 
 def _anthropic_web_search(
-    prompt: str, *, model: str | None = None, use_light_model: bool = False,
+    prompt: str,
+    *,
+    model: str | None = None,
+    use_light_model: bool = False,
 ) -> LLMResponse:
     tool = build_anthropic_web_search_tool(use_light_model=use_light_model)
     return tool.search(prompt, model=model)
 
 
 def _gemini_web_search(
-    prompt: str, *, model: str | None = None, use_light_model: bool = False,
+    prompt: str,
+    *,
+    model: str | None = None,
+    use_light_model: bool = False,
 ) -> LLMResponse:
     tool = build_gemini_web_search_tool(use_light_model=use_light_model)
     return tool.search(prompt, model=model)

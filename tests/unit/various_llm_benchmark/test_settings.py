@@ -4,6 +4,7 @@ import pytest
 
 from various_llm_benchmark.settings import Settings
 
+
 def _set_api_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
     monkeypatch.setenv("GEMINI_API_KEY", "gemini-key")

@@ -5,16 +5,17 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Self, cast
+
 from psycopg import Error as PsycopgError
 
 from various_llm_benchmark.llm.retriever_ingest import (
     BaseChunker,
     ChunkerStrategy,
     DocumentChunk,
-    TextDocument,
+    SlidingWindowChunker,
     SupportsCursor,
     SupportsTransactionalConnection,
-    SlidingWindowChunker,
+    TextDocument,
     chunk_documents,
     ingest_text_directory,
     load_text_documents,
@@ -23,6 +24,7 @@ from various_llm_benchmark.settings import settings
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
     from _pytest.monkeypatch import MonkeyPatch
 
 
@@ -115,12 +117,14 @@ def test_load_and_chunk_sliding_window(tmp_path: Path) -> None:
 
 
 def test_ingest_text_directory_retries_and_upserts(
-    monkeypatch: MonkeyPatch, tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """Ingestion should retry failed upserts and commit successfully."""
     monkeypatch.setattr(settings, "enable_pgvector", True)
     monkeypatch.setattr(settings, "postgres_schema", "public")
     monkeypatch.setattr(settings, "pgvector_table_name", "items")
+
     def _sleep(_: float) -> None:
         return None
 
@@ -162,7 +166,8 @@ def test_ingest_text_directory_retries_and_upserts(
 
 
 def test_ingest_text_directory_uses_chunk_strategy_name(
-    monkeypatch: MonkeyPatch, tmp_path: Path,
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """Chunk strategy names should resolve via the registry mapping."""
     monkeypatch.setattr(settings, "enable_pgvector", True)

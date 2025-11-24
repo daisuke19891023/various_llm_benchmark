@@ -18,6 +18,12 @@ fi
 
 # Install dependencies
 echo "Creating virtual environment and installing dependencies..."
+if [ ! -d .venv ]; then
+    echo "Creating .venv using uv..."
+    uv venv .venv
+fi
+# Activate the virtual environment
+source .venv/bin/activate
 uv sync --extra dev
 
 # Setup .env
@@ -27,15 +33,6 @@ if [ ! -f .env ]; then
     echo "Please edit .env to set your API keys."
 else
     echo ".env already exists. Skipping."
-fi
-
-# Install Gemini CLI if npm is available
-if command -v npm &> /dev/null; then
-    echo "Installing @google/gemini-cli..."
-    npm install -g @google/gemini-cli
-else
-    echo "Warning: npm not found. Skipping @google/gemini-cli installation."
-    echo "To use Gemini CLI features, please install Node.js and run: npm install -g @google/gemini-cli"
 fi
 
 # Start Database

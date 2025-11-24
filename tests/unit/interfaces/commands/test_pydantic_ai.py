@@ -16,7 +16,11 @@ def test_create_provider_uses_settings(monkeypatch: Any) -> None:
 
     class DummyProvider:
         def __init__(
-            self, *, model: str, system_prompt: str | None, temperature: float,
+            self,
+            *,
+            model: str,
+            system_prompt: str | None,
+            temperature: float,
         ) -> None:
             created.update(model=model, system_prompt=system_prompt, temperature=temperature)
 

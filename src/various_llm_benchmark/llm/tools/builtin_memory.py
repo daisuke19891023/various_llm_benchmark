@@ -36,9 +36,7 @@ class InMemoryStore:
         normalized_query = query.casefold()
         with self._lock:
             matches = [
-                message
-                for message in reversed(self._messages)
-                if normalized_query in message.content.casefold()
+                message for message in reversed(self._messages) if normalized_query in message.content.casefold()
             ]
         return list(reversed(matches[:limit]))
 
@@ -127,4 +125,3 @@ def _register_tools() -> None:
 
 
 _register_tools()
-

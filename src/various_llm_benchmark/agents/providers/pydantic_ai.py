@@ -7,19 +7,18 @@ import inspect
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
-from pydantic_ai import Agent, RunContext
-from pydantic_ai.messages import (
-    ImageUrl,
-    ModelMessage,
-    ModelRequest,
-    ModelResponse,
-    SystemPromptPart,
-    TextPart,
-    UserContent,
-    UserPromptPart,
-)
-from pydantic_ai.settings import ModelSettings
-from pydantic_ai.tools import Tool
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
+    from pydantic_ai import RunContext
+    from pydantic_ai.messages import (
+        ModelMessage,
+        UserContent,
+    )
+    from pydantic_ai.settings import ModelSettings
+    from pydantic_ai.tools import Tool
+
+    from various_llm_benchmark.llm.tools.registry import ToolRegistration
 
 from various_llm_benchmark.logger import BaseComponent
 from various_llm_benchmark.models import (
@@ -28,11 +27,6 @@ from various_llm_benchmark.models import (
     LLMResponse,
     normalize_tool_calls,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
-
-    from various_llm_benchmark.llm.tools.registry import ToolRegistration
 
 
 class AgentRunner(Protocol):
@@ -149,6 +143,8 @@ class PydanticAIAgentProvider(BaseComponent):
             temperature=temperature,
             tools=tools,
         )
+        from pydantic_ai.messages import ImageUrl
+
         image_prompt: list[UserContent] = [prompt, ImageUrl(url=image.as_data_url(), media_type=image.media_type)]
         run_result, elapsed_seconds = self._run(agent, image_prompt)
         response = self._build_response(run_result, model or self._model, elapsed_seconds)
@@ -173,11 +169,15 @@ class PydanticAIAgentProvider(BaseComponent):
         )
 
     def _build_model_settings(self, temperature: float | None) -> ModelSettings:
+        from pydantic_ai.settings import ModelSettings
+
         model_temperature = temperature if temperature is not None else self._temperature
         return ModelSettings(temperature=model_temperature)
 
     @staticmethod
     def _to_model_message(message: ChatMessage) -> ModelMessage:
+        from pydantic_ai.messages import ModelRequest, ModelResponse, SystemPromptPart, TextPart, UserPromptPart
+
         if message.role == "assistant":
             return ModelResponse(parts=[TextPart(content=message.content)])
         if message.role == "system":
@@ -188,6 +188,8 @@ class PydanticAIAgentProvider(BaseComponent):
         return [self._wrap_tool(registration) for registration in registrations]
 
     def _wrap_tool(self, registration: ToolRegistration) -> Tool:
+        from pydantic_ai.tools import Tool
+
         handler = registration.handler
         takes_ctx = self._handler_accepts_run_context(handler)
 
@@ -199,6 +201,8 @@ class PydanticAIAgentProvider(BaseComponent):
         return Tool(tool_fn, name=registration.name, description=registration.description)
 
     def _handler_accepts_run_context(self, handler: Callable[..., object]) -> bool:
+        from pydantic_ai import RunContext
+
         signature = inspect.signature(handler)
         parameters = list(signature.parameters.values())
         if not parameters:
@@ -241,6 +245,8 @@ class PydanticAIAgentProvider(BaseComponent):
         return str(response)
 
     def _extract_text(self, messages: Sequence[ModelMessage]) -> str:
+        from pydantic_ai.messages import ModelResponse, TextPart
+
         for message in reversed(messages):
             if isinstance(message, ModelResponse):
                 parts = getattr(message, "parts", [])
@@ -273,6 +279,8 @@ class PydanticAIAgentProvider(BaseComponent):
         model_settings: ModelSettings,
         tools: Sequence[Tool],
     ) -> AgentRunner:
+        from pydantic_ai import Agent
+
         return cast(
             "AgentRunner",
             Agent(

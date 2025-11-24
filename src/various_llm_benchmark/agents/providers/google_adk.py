@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable, Coroutine, Iterable
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, cast
-from collections.abc import Awaitable, Callable, Coroutine, Iterable
 from uuid import uuid4
 
 from google.adk import Agent
@@ -194,9 +194,16 @@ class GoogleADKProvider(BaseComponent):
         return InMemoryRunner(agent=agent)
 
     def _default_run_function(
-        self, runner: Any, session_id: str, new_message: types.Content, run_config: RunConfig,
+        self,
+        runner: Any,
+        session_id: str,
+        new_message: types.Content,
+        run_config: RunConfig,
     ) -> Iterable[Event]:
         run_callable = cast("Callable[..., Iterable[Event]]", runner.run)
         return run_callable(
-            user_id=self._user_id, session_id=session_id, new_message=new_message, run_config=run_config,
+            user_id=self._user_id,
+            session_id=session_id,
+            new_message=new_message,
+            run_config=run_config,
         )

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import httpx
 import math
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Self, cast
 
+import httpx
 import pytest
 from openai import APITimeoutError
 from psycopg_pool import PoolTimeout
@@ -174,6 +174,7 @@ class BatchEmbeddings:
 
 def test_generate_embedding_retries_on_transient_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """OpenAI embedding generation should retry transient failures."""
+
     def _sleep(_: float) -> None:
         return None
 

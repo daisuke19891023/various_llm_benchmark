@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, Literal, TypedDict, cast
-from collections.abc import Mapping
 
 from various_llm_benchmark.llm.protocol import LLMClient
 from various_llm_benchmark.logger import BaseComponent
@@ -99,9 +99,7 @@ class OpenAILLMClient(LLMClient, BaseComponent):
         """Generate a completion using chat messages."""
         resolved_model = model or self._default_model
         self.log_start("openai_chat", model=resolved_model, message_count=len(messages))
-        openai_messages: list[dict[str, str]] = [
-            {"role": msg.role, "content": msg.content} for msg in messages
-        ]
+        openai_messages: list[dict[str, str]] = [{"role": msg.role, "content": msg.content} for msg in messages]
         openai_input = cast("ResponseInputParam", openai_messages)
         start = perf_counter()
         completion = _create_response(

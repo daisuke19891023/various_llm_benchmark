@@ -10,6 +10,7 @@ from various_llm_benchmark.models import ChatMessage, LLMResponse, MediaInput
 
 if TYPE_CHECKING:
     from pathlib import Path
+
     import pytest
 
 runner = CliRunner()
@@ -236,7 +237,7 @@ def test_claude_complete(monkeypatch: pytest.MonkeyPatch) -> None:
             captured.append(str(thinking))
         return LLMResponse(content=f"ok:{prompt}", model=model or "m", raw={"source": "test"})
 
-    def fake_client() -> SimpleNamespace:
+    def fake_client(extended_thinking: bool = False) -> SimpleNamespace:
         return SimpleNamespace(generate=generate)
 
     monkeypatch.setattr("various_llm_benchmark.interfaces.commands.claude._client", fake_client)
@@ -268,8 +269,8 @@ def test_claude_chat(monkeypatch: pytest.MonkeyPatch) -> None:
         recorded_thinking.append(thinking)
         return LLMResponse(content=str(len(messages)), model=model or "m", raw={"source": "test"})
 
-    def fake_client() -> SimpleNamespace:
-        return SimpleNamespace(chat=chat)
+        def fake_client(extended_thinking: bool = False) -> SimpleNamespace:
+            return SimpleNamespace(chat=chat)
 
     monkeypatch.setattr("various_llm_benchmark.interfaces.commands.claude._client", fake_client)
 
@@ -280,10 +281,11 @@ def test_claude_chat(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     assert result.exit_code == 0
-    assert recorded_messages[0][0].role == "system"
+    # Claude chat doesn't include system prompt in messages (it's passed separately to API)
+    assert recorded_messages[0][0].role == "user"
     assert recorded_messages[0][-1].content == "hi"
     assert recorded_thinking[0] == {"type": "enabled", "budget_tokens": 7000}
-    assert result.stdout.strip() == "2"
+    assert result.stdout.strip() == "1"
 
 
 def test_gemini_chat(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -331,11 +333,13 @@ def test_gemini_chat_accepts_thinking_level(monkeypatch: pytest.MonkeyPatch) -> 
         system_instruction: str | None = None,
         thinking_level: str | None = None,
     ) -> LLMResponse:
-        recorded.update({
-            "messages": messages,
-            "system_instruction": system_instruction,
-            "thinking_level": thinking_level,
-        })
+        recorded.update(
+            {
+                "messages": messages,
+                "system_instruction": system_instruction,
+                "thinking_level": thinking_level,
+            },
+        )
         return LLMResponse(content=str(len(messages)), model=model or "g", raw={"source": "test"})
 
     def fake_client() -> SimpleNamespace:

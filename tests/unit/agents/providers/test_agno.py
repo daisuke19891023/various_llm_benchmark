@@ -5,19 +5,19 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 from unittest.mock import MagicMock, call
 
-import various_llm_benchmark.agents.providers.agno as agno_module
-
 from agno.models.anthropic import Claude
 from agno.models.google import Gemini
 from agno.models.message import Message
 from agno.models.openai import OpenAIChat
 from agno.run.agent import RunOutput
 
+import various_llm_benchmark.agents.providers.agno as agno_module
 from various_llm_benchmark.agents.providers.agno import AgnoAgentProvider
 from various_llm_benchmark.models import ChatMessage
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
     import pytest
 
 
@@ -138,7 +138,9 @@ def test_default_agent_factory_applies_instructions(monkeypatch: pytest.MonkeyPa
 
     class StubAgent:
         def __init__(
-            self, model: OpenAIChat | Claude | Gemini, instructions: str | None = None,
+            self,
+            model: OpenAIChat | Claude | Gemini,
+            instructions: str | None = None,
         ) -> None:
             self.model = model
             self.instructions = instructions
@@ -149,7 +151,7 @@ def test_default_agent_factory_applies_instructions(monkeypatch: pytest.MonkeyPa
             self.inputs.append(run_input)
             return StubRunResult(self.model.id)
 
-    monkeypatch.setattr("various_llm_benchmark.agents.providers.agno.Agent", StubAgent)
+    monkeypatch.setattr("agno.agent.Agent", StubAgent)
 
     provider = AgnoAgentProvider(
         openai_api_key="openai-key",

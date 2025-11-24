@@ -4,14 +4,11 @@ import asyncio
 import json
 from functools import cache
 from pathlib import Path
+from textwrap import shorten
 from time import perf_counter
 from typing import TYPE_CHECKING, cast
-from textwrap import shorten
 
 import typer
-from anthropic import Anthropic
-from google.genai import Client
-from openai import OpenAI
 from pydantic import BaseModel, Field
 from rich.box import SIMPLE_HEAD
 from rich.console import Console
@@ -24,9 +21,6 @@ from various_llm_benchmark.interfaces.runner import (
     TaskHooks,
     TaskResult,
 )
-from various_llm_benchmark.llm.providers.anthropic.client import AnthropicLLMClient
-from various_llm_benchmark.llm.providers.gemini.client import GeminiLLMClient
-from various_llm_benchmark.llm.providers.openai.client import OpenAILLMClient
 from various_llm_benchmark.logger import BaseComponent
 from various_llm_benchmark.models import ChatMessage, LLMResponse, ToolCall
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
@@ -36,6 +30,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from various_llm_benchmark.llm.protocol import LLMClient
+    from various_llm_benchmark.llm.providers.anthropic.client import AnthropicLLMClient
+    from various_llm_benchmark.llm.providers.gemini.client import GeminiLLMClient
+    from various_llm_benchmark.llm.providers.openai.client import OpenAILLMClient
+
 
 compare_app = typer.Typer(help="複数プロバイダーの応答をProgress表示付きで比較します。")
 console = Console()
@@ -50,8 +48,7 @@ TARGET_OPTION: list[str] | None = typer.Option(
     "--target",
     "-t",
     help=(
-        "比較対象のプロバイダーとモデルを 'provider:model' 形式で指定します。"
-        "モデル省略時はデフォルト設定を使用します。"
+        "比較対象のプロバイダーとモデルを 'provider:model' 形式で指定します。モデル省略時はデフォルト設定を使用します。"
     ),
 )
 OUTPUT_FORMAT_OPTION: str = typer.Option(
@@ -142,16 +139,28 @@ def _prompt_template(provider_key: str) -> PromptTemplate:
 
 
 def _openai_client() -> OpenAILLMClient:
+    from openai import OpenAI
+
+    from various_llm_benchmark.llm.providers.openai.client import OpenAILLMClient
+
     client = OpenAI(api_key=settings.openai_api_key.get_secret_value())
     return OpenAILLMClient(client, settings.openai_model, temperature=settings.default_temperature)
 
 
 def _anthropic_client() -> AnthropicLLMClient:
+    from anthropic import Anthropic
+
+    from various_llm_benchmark.llm.providers.anthropic.client import AnthropicLLMClient
+
     client = Anthropic(api_key=settings.anthropic_api_key.get_secret_value())
     return AnthropicLLMClient(client, settings.anthropic_model, temperature=settings.default_temperature)
 
 
 def _gemini_client() -> GeminiLLMClient:
+    from google.genai import Client
+
+    from various_llm_benchmark.llm.providers.gemini.client import GeminiLLMClient
+
     client = Client(api_key=settings.gemini_api_key.get_secret_value())
     return GeminiLLMClient(
         client,
@@ -446,11 +455,7 @@ def _render_table(results: list[ComparisonResult]) -> Table:
         elapsed_display = f"{result.elapsed_seconds:.2f}" if result.elapsed_seconds is not None else "-"
         call_count_display = str(result.call_count) if result.call_count is not None else "-"
         tools_display = ", ".join(result.tools) if result.tools else "-"
-        body = (
-            f"[red]ERROR[/red]: {result.error}"
-            if result.error is not None
-            else result.content or ""
-        )
+        body = f"[red]ERROR[/red]: {result.error}" if result.error is not None else result.content or ""
         table.add_row(
             result.provider,
             result.model,
@@ -519,7 +524,9 @@ def summarize_results(results: list[ComparisonResult]) -> list[ComparisonSummary
 
 
 def _render_results(
-    results: list[ComparisonResult], summaries: list[ComparisonSummary], output_format: str,
+    results: list[ComparisonResult],
+    summaries: list[ComparisonSummary],
+    output_format: str,
 ) -> Table | tuple[Table, Table] | str:
     normalized_format = output_format.lower()
     if normalized_format == "table":
@@ -539,7 +546,7 @@ def compare_chat(
     output_file: Path | None = OUTPUT_FILE_OPTION,
     concurrency: int = CONCURRENCY_OPTION,
     retries: int = RETRY_OPTION,
-    ) -> None:
+) -> None:
     """Run the same prompt across providers and compare responses."""
     messages_history = parse_history(history or [])
     parsed_targets = _parse_targets(targets)

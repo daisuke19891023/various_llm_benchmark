@@ -46,4 +46,3 @@ def test_read_audio_or_video_rejects_other_types(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="Unsupported media type"):
         read_audio_or_video_file(document)
-

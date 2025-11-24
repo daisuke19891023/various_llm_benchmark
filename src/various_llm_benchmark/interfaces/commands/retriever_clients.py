@@ -3,26 +3,21 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Literal, Protocol, cast
+from typing import TYPE_CHECKING, Literal, Protocol, cast
+
+if TYPE_CHECKING:
+    from various_llm_benchmark.llm.tools.retriever import RetrievedDocument
+
 
 from various_llm_benchmark.llm.tools import ToolSelector
 from various_llm_benchmark.llm.tools.registry import (
-    NativeToolType,
     RETRIEVER_INPUT_SCHEMA,
     RETRIEVER_TAG,
     RETRIEVER_TOOL_NAMESPACE,
+    NativeToolType,
     ToolCategory,
     ToolRegistration,
     register_tool,
-)
-from various_llm_benchmark.llm.tools.retriever import (
-    EmbeddingProvider,
-    RetrievedDocument,
-    create_postgres_pool,
-    generate_embedding,
-    merge_ranked_results,
-    pgroonga_full_text_search,
-    pgvector_similarity_search,
 )
 from various_llm_benchmark.settings import settings
 
@@ -103,6 +98,15 @@ def _retrieve(
     threshold: float | None = None,
     timeout: float = 5.0,
 ) -> dict[str, object]:
+    from various_llm_benchmark.llm.tools.retriever import (
+        EmbeddingProvider,
+        create_postgres_pool,
+        generate_embedding,
+        merge_ranked_results,
+        pgroonga_full_text_search,
+        pgvector_similarity_search,
+    )
+
     pool = create_postgres_pool()
     embedding_provider = EmbeddingProvider(provider)
     vector_results = []

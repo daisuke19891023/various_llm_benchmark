@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import various_llm_benchmark.agents.providers.google_adk as google_adk_module
-
 from google.adk.events.event import Event
 from google.adk.sessions.session import Session
 from google.genai import types
 
+import various_llm_benchmark.agents.providers.google_adk as google_adk_module
 from various_llm_benchmark.agents.providers.google_adk import GoogleADKProvider
 from various_llm_benchmark.models import ChatMessage, ImageInput
 
