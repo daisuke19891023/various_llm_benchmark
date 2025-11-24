@@ -56,6 +56,7 @@ uv run various-llm-benchmark gemini complete "こんにちは"
 uv run various-llm-benchmark gemini chat "次の質問に答えて" \
   --history "system:最新情報を確認して" \
   --history "user:今日の予定は？"
+uv run various-llm-benchmark gemini multimodal "音声を要約して" ./path/to/audio.wav
 ```
 
 ### DsPy

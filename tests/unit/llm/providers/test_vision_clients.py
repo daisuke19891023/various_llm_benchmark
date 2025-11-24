@@ -6,7 +6,7 @@ from typing import Any, cast
 from various_llm_benchmark.llm.providers.anthropic.client import AnthropicLLMClient
 from various_llm_benchmark.llm.providers.gemini.client import GeminiLLMClient
 from various_llm_benchmark.llm.providers.openai.client import OpenAILLMClient
-from various_llm_benchmark.models import ImageInput
+from various_llm_benchmark.models import ImageInput, MediaInput
 
 
 class StubOpenAIResponse:
@@ -162,3 +162,26 @@ def test_gemini_vision_uses_inline_data() -> None:
     assert inline_data["mime_type"] == "image/webp"
     assert inline_data["data"] == image.data
     assert stub_client.models.kwargs.get("system_instruction") == "s"
+
+
+def test_gemini_multimodal_supports_audio_and_video() -> None:
+    """Gemini multimodal calls should inline audio and video payloads."""
+    stub_client = StubGemini()
+    client = GeminiLLMClient(cast("Any", stub_client), "gemini-default", temperature=0.2)
+    audio = MediaInput(media_type="audio/wav", data="YXVkaW8=")
+    video = MediaInput(media_type="video/mp4", data="dmlkZW8=")
+
+    response = client.multimodal("describe", [audio, video], model="gemini-2.1", system_prompt="sys")
+
+    assert response.content == "gemini-image"
+    assert response.model == "gemini-2.0"
+    assert stub_client.models.kwargs is not None
+    parts = stub_client.models.kwargs["contents"][0]["parts"]  # type: ignore[index]
+    assert parts[0]["text"] == "describe"  # type: ignore[index]
+    inline_audio = parts[1]["inline_data"]  # type: ignore[index]
+    inline_video = parts[2]["inline_data"]  # type: ignore[index]
+    assert inline_audio["mime_type"] == "audio/wav"
+    assert inline_audio["data"] == audio.data
+    assert inline_video["mime_type"] == "video/mp4"
+    assert inline_video["data"] == video.data
+    assert stub_client.models.kwargs.get("system_instruction") == "sys"

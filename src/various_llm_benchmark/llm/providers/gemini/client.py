@@ -1,17 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, cast
 
 from various_llm_benchmark.llm.protocol import LLMClient
 from various_llm_benchmark.logger import BaseComponent
-from various_llm_benchmark.models import (
-    ChatMessage,
-    ImageInput,
-    LLMResponse,
-    normalize_tool_calls,
-)
+from various_llm_benchmark.models import ChatMessage, ImageInput, LLMResponse, MediaInput, normalize_tool_calls
 
 if TYPE_CHECKING:
     from google.genai import Client
@@ -163,6 +158,64 @@ class GeminiLLMClient(LLMClient, BaseComponent):
         )
         self.log_io(direction="output", model=model_name, content=content)
         self.log_end("gemini_vision", elapsed_seconds=elapsed_seconds)
+        return result
+
+    def multimodal(
+        self,
+        prompt: str,
+        media: Sequence[MediaInput],
+        *,
+        model: str | None = None,
+        system_prompt: str | None = None,
+        thinking_level: str | None = None,
+    ) -> LLMResponse:
+        """Generate a response that includes audio or video context."""
+        if not media:
+            message = "At least one media input is required for Gemini multimodal calls"
+            raise ValueError(message)
+
+        resolved_model = model or self._default_model
+        self.log_start(
+            "gemini_multimodal",
+            model=resolved_model,
+            media_count=len(media),
+            media_types=[item.media_type for item in media],
+        )
+        self.log_io(direction="input", prompt=prompt, media_items=len(media))
+        models_client = cast("Any", self._client.models)
+        parts: list[dict[str, object]] = [{"text": prompt}]
+        parts.extend(
+            {"inline_data": {"mime_type": item.media_type, "data": item.data}} for item in media
+        )
+
+        request_kwargs: dict[str, object] = {
+            "model": resolved_model,
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": parts,
+                },
+            ],
+            "config": _build_config(self._temperature, self._thinking_level, thinking_level),
+        }
+        if system_prompt:
+            request_kwargs["system_instruction"] = system_prompt
+
+        start = perf_counter()
+        response: Any = models_client.generate_content(**request_kwargs)
+        elapsed_seconds = perf_counter() - start
+        content = _extract_text(response)
+        model_name = _extract_model(response, resolved_model)
+        raw_response = _dump_raw(response)
+        result = LLMResponse(
+            content=content,
+            model=model_name,
+            raw=raw_response,
+            elapsed_seconds=elapsed_seconds,
+            tool_calls=normalize_tool_calls(raw_response),
+        )
+        self.log_io(direction="output", model=model_name, content=content)
+        self.log_end("gemini_multimodal", elapsed_seconds=elapsed_seconds)
         return result
 
 

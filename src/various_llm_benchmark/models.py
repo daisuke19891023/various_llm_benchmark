@@ -16,15 +16,19 @@ class ChatMessage(BaseModel):
     content: str
 
 
-class ImageInput(BaseModel):
-    """Represents an image payload encoded for LLM consumption."""
+class MediaInput(BaseModel):
+    """Represents a binary media payload encoded for LLM consumption."""
 
     media_type: str
     data: str
 
     def as_data_url(self) -> str:
-        """Return the image as a data URL for providers that expect URLs."""
+        """Return the media as a data URL for providers that expect URLs."""
         return f"data:{self.media_type};base64,{self.data}"
+
+
+class ImageInput(MediaInput):
+    """Represents an image payload encoded for LLM consumption."""
 
 
 class ToolCall(BaseModel):
