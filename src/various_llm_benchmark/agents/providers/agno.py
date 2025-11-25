@@ -5,12 +5,6 @@ from __future__ import annotations
 from time import perf_counter
 from typing import TYPE_CHECKING, Literal, Protocol, cast
 
-from agno.agent import Agent
-from agno.models.anthropic import Claude
-from agno.models.google import Gemini
-from agno.models.message import Message
-from agno.models.openai import OpenAIChat
-
 from various_llm_benchmark.logger import BaseComponent
 from various_llm_benchmark.models import (
     ChatMessage,
@@ -22,8 +16,14 @@ from various_llm_benchmark.models import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from agno.models.anthropic import Claude
+    from agno.models.google import Gemini
+    from agno.models.message import Message
+    from agno.models.openai import OpenAIChat
 
-AgentModel = OpenAIChat | Claude | Gemini
+    AgentModel = OpenAIChat | Claude | Gemini
+else:
+    AgentModel = object
 
 
 class AgentRunner(Protocol):
@@ -87,7 +87,11 @@ class AgnoAgentProvider(BaseComponent):
         return response
 
     def chat(
-        self, messages: list[ChatMessage], *, provider: ProviderName, model: str | None = None,
+        self,
+        messages: list[ChatMessage],
+        *,
+        provider: ProviderName,
+        model: str | None = None,
     ) -> LLMResponse:
         """Generate a response using message history."""
         self.log_start(
@@ -150,7 +154,9 @@ class AgnoAgentProvider(BaseComponent):
         return self._gemini_model
 
     def _build_agent(
-        self, provider: ProviderName, model: str | None,
+        self,
+        provider: ProviderName,
+        model: str | None,
     ) -> tuple[AgentRunner, AgentModel]:
         model_obj = self._create_model(provider, model)
         runner = cast("AgentRunner", self._agent_factory(model_obj))
@@ -158,17 +164,23 @@ class AgnoAgentProvider(BaseComponent):
 
     def _create_model(self, provider: ProviderName, model: str | None) -> AgentModel:
         if provider == "openai":
+            from agno.models.openai import OpenAIChat
+
             return OpenAIChat(
                 id=model or self._openai_model,
                 temperature=self._temperature,
                 api_key=self._openai_api_key,
             )
         if provider == "anthropic":
+            from agno.models.anthropic import Claude
+
             return Claude(
                 id=model or self._anthropic_model,
                 temperature=self._temperature,
                 api_key=self._anthropic_api_key,
             )
+        from agno.models.google import Gemini
+
         return Gemini(
             id=model or self._gemini_model,
             temperature=self._temperature,
@@ -177,6 +189,8 @@ class AgnoAgentProvider(BaseComponent):
 
     @staticmethod
     def _to_agno_message(message: ChatMessage) -> Message:
+        from agno.models.message import Message
+
         return Message(role=message.role, content=message.content)
 
     def _run(self, agent: AgentRunner, run_input: object) -> tuple[RunResult, float]:
@@ -211,4 +225,6 @@ class AgnoAgentProvider(BaseComponent):
         return str(run_output.content)
 
     def _default_agent_factory(self, model: AgentModel) -> AgentRunner:
+        from agno.agent import Agent
+
         return cast("AgentRunner", Agent(model=model, instructions=self._instructions))

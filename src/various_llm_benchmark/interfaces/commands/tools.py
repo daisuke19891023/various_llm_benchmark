@@ -6,9 +6,7 @@ from typing import Literal
 import typer
 from rich.console import Console
 
-from various_llm_benchmark.interfaces.commands.retriever_clients import (
-    resolve_retriever_client,
-)
+from various_llm_benchmark.interfaces.commands.retriever_clients import resolve_retriever_client
 from various_llm_benchmark.interfaces.commands.web_search_clients import resolve_web_search_client
 from various_llm_benchmark.llm.tools.registry import ToolCategory
 
@@ -73,7 +71,9 @@ def web_search(
 ) -> None:
     """Search対応のLLM呼び出しを実行します."""
     search = resolve_web_search_client(
-        provider, category=category, use_light_model=light_model,
+        provider,
+        category=category,
+        use_light_model=light_model,
     )
     with console.status("組み込みWeb検索ツールを呼び出し中...", spinner="dots"):
         response = search(prompt, model=model)

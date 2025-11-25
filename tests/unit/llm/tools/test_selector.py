@@ -50,4 +50,3 @@ def test_select_one_requires_single_match() -> None:
 
     chosen = selector.select_one(category=ToolCategory.EXTERNAL, tags=["x"])
     assert chosen.id == "tool/b"
-

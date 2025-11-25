@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-from typing import Any, TypedDict, cast
 from collections.abc import Iterator, Mapping
+from typing import Any, TypedDict, cast
 
 from pydantic import BaseModel, Field, model_validator
 

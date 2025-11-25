@@ -72,7 +72,8 @@ def test_tools_web_search_anthropic(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     result = runner.invoke(
-        app, ["tools", "web-search", "docs", "--provider", "anthropic", "--light-model"],
+        app,
+        ["tools", "web-search", "docs", "--provider", "anthropic", "--light-model"],
     )
 
     assert result.exit_code == 0

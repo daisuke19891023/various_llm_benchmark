@@ -7,8 +7,8 @@ from various_llm_benchmark.interfaces.commands.agent_sdk import agent_sdk_app
 from various_llm_benchmark.interfaces.commands.claude import claude_app
 from various_llm_benchmark.interfaces.commands.compare import compare_app
 from various_llm_benchmark.interfaces.commands.dspy import dspy_app
-from various_llm_benchmark.interfaces.commands.google_adk import adk_app
 from various_llm_benchmark.interfaces.commands.gemini import gemini_app
+from various_llm_benchmark.interfaces.commands.google_adk import adk_app
 from various_llm_benchmark.interfaces.commands.openai import openai_app
 from various_llm_benchmark.interfaces.commands.pydantic_ai import pydantic_ai_app
 from various_llm_benchmark.interfaces.commands.tools import tools_app

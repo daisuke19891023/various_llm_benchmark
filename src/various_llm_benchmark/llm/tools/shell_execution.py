@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import subprocess as sp
+from dataclasses import dataclass
 
 from various_llm_benchmark.llm.tools.registry import (
-    NativeToolType,
     SHELL_TAG,
+    NativeToolType,
     ToolCategory,
     ToolRegistration,
     register_tool,
@@ -60,7 +60,10 @@ def _ensure_text(value: str | bytes | None) -> str:
 
 
 def run_shell(
-    command: str, args: list[str] | None = None, *, timeout_seconds: float = 5.0,
+    command: str,
+    args: list[str] | None = None,
+    *,
+    timeout_seconds: float = 5.0,
 ) -> dict[str, int | str]:
     """Execute an allowlisted shell command and capture outputs."""
     if timeout_seconds <= 0:
@@ -161,4 +164,3 @@ def _register_tool() -> None:
 
 
 _register_tool()
-

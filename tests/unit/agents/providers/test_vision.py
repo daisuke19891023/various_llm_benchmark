@@ -63,7 +63,11 @@ class StubAgent:
     received: list[dict[str, object]] | None = None
 
     def run(
-        self, run_input: list[dict[str, object]] | str, *, stream: bool | None = None, **_: object,
+        self,
+        run_input: list[dict[str, object]] | str,
+        *,
+        stream: bool | None = None,
+        **_: object,
     ) -> StubRunResult:
         """Record provided run input without contacting any backend."""
         del stream

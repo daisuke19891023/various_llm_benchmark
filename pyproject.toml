@@ -1,9 +1,13 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "various-llm-benchmark"
 version = "0.1.0"
 description = "CLI playground for testing multiple LLM and agent frameworks"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "agno>=2.3.2",
     "anthropic>=0.74.1",
@@ -29,7 +33,6 @@ various-llm-benchmark = "various_llm_benchmark.interfaces.cli:main"
 
 [project.optional-dependencies]
 dev = [
-    "uv[dev]>=0.9.5",
     "nox>=2025.10.16",
     "ruff>=0.14.1",
     "pyright>=1.1.406",
@@ -89,7 +92,7 @@ exclude = [
 ]
 line-length = 120
 indent-width = 4
-target-version = "py313"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["ALL"]

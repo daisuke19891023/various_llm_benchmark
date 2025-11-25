@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
     from litellm.types.utils import ModelResponse
 
 from various_llm_benchmark.llm.providers.dspy.client import DsPyLLMClient, SupportsDsPyLM
@@ -144,6 +145,7 @@ def test_chat_uses_model_override() -> None:
 
 def test_vision_not_supported() -> None:
     """Vision should raise NotImplementedError until supported."""
+
     def factory(*, model: str, temperature: float, **kwargs: Any) -> SupportsDsPyLM:
         return _DummyLM(model=model, temperature=temperature, **kwargs)
 

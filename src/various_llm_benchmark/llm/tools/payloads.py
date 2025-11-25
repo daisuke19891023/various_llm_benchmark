@@ -8,10 +8,10 @@ from google.genai import types as genai_types
 
 from various_llm_benchmark.llm.tools.registry import (
     CODE_EXECUTION_TAG,
-    NativeToolType,
     SHELL_TAG,
-    ToolRegistration,
     WEB_SEARCH_TAG,
+    NativeToolType,
+    ToolRegistration,
 )
 
 if TYPE_CHECKING:
@@ -138,4 +138,3 @@ def to_agents_sdk_tools_payload(tools: Sequence[ToolRegistration]) -> list[dict[
 def to_google_adk_tools_payload(tools: Sequence[ToolRegistration]) -> list[genai_types.Tool]:
     """Return tool payloads suitable for Google ADK agents."""
     return to_gemini_tools_payload(tools)
-

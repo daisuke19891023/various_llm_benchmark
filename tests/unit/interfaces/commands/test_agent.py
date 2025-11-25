@@ -14,6 +14,8 @@ from various_llm_benchmark.models import ChatMessage, LLMResponse
 if TYPE_CHECKING:
     import pytest
 
+    from various_llm_benchmark.agents.providers.agno import ProviderName
+
 runner = CliRunner()
 
 
@@ -25,7 +27,11 @@ class StubAgentProvider:
         self.calls: list[dict[str, Any]] = []
 
     def complete(
-        self, prompt: str, *, provider: agent_cmd.ProviderName, model: str | None = None,
+        self,
+        prompt: str,
+        *,
+        provider: ProviderName,
+        model: str | None = None,
     ) -> LLMResponse:
         """Record a complete call and return canned response."""
         self.calls.append({"kind": "complete", "prompt": prompt, "provider": provider, "model": model})
@@ -36,7 +42,11 @@ class StubAgentProvider:
         )
 
     def chat(
-        self, messages: list[ChatMessage], *, provider: agent_cmd.ProviderName, model: str | None = None,
+        self,
+        messages: list[ChatMessage],
+        *,
+        provider: ProviderName,
+        model: str | None = None,
     ) -> LLMResponse:
         """Record a chat call and return count-based response."""
         self.calls.append(
@@ -53,6 +63,7 @@ class StubAgentProvider:
 def test_agent_complete_command(monkeypatch: pytest.MonkeyPatch) -> None:
     """Complete command should route to provider with given options."""
     stub_provider = StubAgentProvider()
+
     def provider_factory(*, use_light_model: bool = False) -> StubAgentProvider:
         assert use_light_model is False
         return stub_provider
@@ -74,6 +85,7 @@ def test_agent_complete_command(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_agent_chat_command(monkeypatch: pytest.MonkeyPatch) -> None:
     """Chat command should assemble history and forward it."""
     stub_provider = StubAgentProvider()
+
     def provider_factory(*, use_light_model: bool = False) -> StubAgentProvider:
         assert use_light_model is False
         return stub_provider

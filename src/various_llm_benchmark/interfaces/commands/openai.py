@@ -1,20 +1,18 @@
 from __future__ import annotations
 
 from functools import lru_cache
-
 from pathlib import Path
 
 import typer
-from openai import OpenAI
 from rich.console import Console
 
 from various_llm_benchmark.interfaces.commands.common import build_messages
-from various_llm_benchmark.media.images import read_image_file
 from various_llm_benchmark.llm.providers.openai.client import (
     OpenAILLMClient,
     ReasoningEffort,
     Verbosity,
 )
+from various_llm_benchmark.media.images import read_image_file
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
 from various_llm_benchmark.settings import settings
 
@@ -51,6 +49,8 @@ def _prompt_template() -> PromptTemplate:
 
 
 def _client() -> OpenAILLMClient:
+    from openai import OpenAI
+
     client = OpenAI(api_key=settings.openai_api_key.get_secret_value())
     return OpenAILLMClient(client, settings.openai_model, temperature=settings.default_temperature)
 

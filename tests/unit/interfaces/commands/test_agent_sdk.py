@@ -38,6 +38,7 @@ class StubAgentsProvider:
 def test_agent_sdk_complete(monkeypatch: pytest.MonkeyPatch) -> None:
     """Complete command should route to provider."""
     stub_provider = StubAgentsProvider()
+
     def provider_factory(*, use_light_model: bool = False) -> StubAgentsProvider:
         assert use_light_model is False
         return stub_provider
@@ -54,6 +55,7 @@ def test_agent_sdk_complete(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_agent_sdk_chat(monkeypatch: pytest.MonkeyPatch) -> None:
     """Chat command should build history and forward it."""
     stub_provider = StubAgentsProvider()
+
     def provider_factory(*, use_light_model: bool = False) -> StubAgentsProvider:
         assert use_light_model is False
         return stub_provider

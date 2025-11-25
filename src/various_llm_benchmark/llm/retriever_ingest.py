@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 import time
 from abc import ABC, abstractmethod
@@ -9,11 +10,10 @@ from collections.abc import Callable, Sequence
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, Self, cast
-import importlib
 
+from psycopg import Error as PsycopgError
+from psycopg import sql
 from pydantic import BaseModel, Field
-
-from psycopg import Error as PsycopgError, sql
 
 from various_llm_benchmark.llm.tools.retriever import (
     EmbeddingProvider,
@@ -233,10 +233,13 @@ def _table_identifier(schema: str, table: str) -> sql.Identifier:
     return sql.Identifier(schema, table)
 
 
-def _try_import_execute_values() -> Callable[
-    [SupportsCursor, object, Sequence[tuple[object, ...]], str | None],
-    object,
-] | None:
+def _try_import_execute_values() -> (
+    Callable[
+        [SupportsCursor, object, Sequence[tuple[object, ...]], str | None],
+        object,
+    ]
+    | None
+):
     try:
         module = importlib.import_module("psycopg.extras")
     except ModuleNotFoundError:
@@ -276,10 +279,7 @@ def _upsert_embeddings(
     ).format(table=table_reference)
     values_template = "(%s, %s, %s::jsonb, %s::vector)"
 
-    values = [
-        (chunk.id, chunk.content, json.dumps(chunk.metadata), list(embedding))
-        for chunk, embedding in rows
-    ]
+    values = [(chunk.id, chunk.content, json.dumps(chunk.metadata), list(embedding)) for chunk, embedding in rows]
 
     backoff = sleep_base
     last_error: Exception | None = None
@@ -290,9 +290,7 @@ def _upsert_embeddings(
             with pool.connection(timeout=timeout) as connection:
                 with connection.cursor() as cursor:
                     if execute_values_fn is None:
-                        placeholders = sql.SQL(", ").join(
-                            sql.SQL(values_template) for _ in values
-                        )
+                        placeholders = sql.SQL(", ").join(sql.SQL(values_template) for _ in values)
                         combined_query = sql.SQL(
                             "INSERT INTO {table} (id, content, metadata, embedding) VALUES {values} "
                             "ON CONFLICT (id) DO UPDATE SET "

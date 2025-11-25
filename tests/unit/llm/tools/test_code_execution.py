@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-
 import pytest
-
 from google.genai import types as genai_types
 
 from various_llm_benchmark.llm.tools.builtin_memory import reset_store
@@ -96,4 +94,3 @@ def test_payload_overrides_are_used_for_providers() -> None:
     assert isinstance(gemini_tool, genai_types.Tool)
     assert gemini_tool.code_execution is not None
     assert isinstance(gemini_tool.code_execution, genai_types.ToolCodeExecution)
-

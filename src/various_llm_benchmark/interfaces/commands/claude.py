@@ -3,14 +3,12 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-
 import typer
 from rich.console import Console
-from anthropic import Anthropic
 
 from various_llm_benchmark.interfaces.commands.common import build_messages
-from various_llm_benchmark.media.images import read_image_file
 from various_llm_benchmark.llm.providers.anthropic.client import AnthropicLLMClient
+from various_llm_benchmark.media.images import read_image_file
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
 from various_llm_benchmark.settings import settings
 
@@ -36,15 +34,21 @@ def _prompt_template() -> PromptTemplate:
     return load_provider_prompt("llm", "anthropic")
 
 
-def _client() -> AnthropicLLMClient:
+def _client(extended_thinking: bool = False) -> AnthropicLLMClient:
+    from anthropic import Anthropic
+
     client = Anthropic(api_key=settings.anthropic_api_key.get_secret_value())
-    return AnthropicLLMClient(client, settings.anthropic_model, temperature=settings.default_temperature)
+    # Anthropic requires temperature=1.0 when extended thinking is enabled
+    temperature = 1.0 if extended_thinking else settings.default_temperature
+    return AnthropicLLMClient(client, settings.anthropic_model, temperature=temperature)
 
 
 def _thinking_config(enabled: bool, budget_tokens: int) -> dict[str, object] | None:
     if not enabled:
         return None
-    return {"type": "enabled", "budget_tokens": budget_tokens}
+    # Anthropic requires at least 1024 tokens for extended thinking
+    budget = max(budget_tokens, 1024)
+    return {"type": "enabled", "budget_tokens": budget}
 
 
 @claude_app.command("complete")
@@ -62,7 +66,7 @@ def claude_complete(
 ) -> None:
     """Generate a single-turn response with Claude."""
     with console.status("Claudeで応答生成中...", spinner="dots"):
-        response = _client().generate(
+        response = _client(extended_thinking=extended_thinking).generate(
             _prompt_template().to_prompt_text(prompt),
             model=model,
             thinking=_thinking_config(extended_thinking, thinking_tokens),
@@ -85,9 +89,9 @@ def claude_chat(
     ),
 ) -> None:
     """Generate a chat response with optional history."""
-    messages = build_messages(prompt, history or [], system_prompt=_prompt_template().system)
+    messages = build_messages(prompt, history or [])
     with console.status("Claudeで履歴付き応答を生成中...", spinner="dots"):
-        response = _client().chat(
+        response = _client(extended_thinking=extended_thinking).chat(
             messages,
             model=model,
             thinking=_thinking_config(extended_thinking, thinking_tokens),

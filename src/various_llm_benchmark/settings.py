@@ -15,47 +15,58 @@ class Settings(BaseSettings):
     voyage_api_key: SecretStr = Field(default=SecretStr(""), validation_alias="VOYAGE_API_KEY")
     openai_model: str = Field(default="gpt-5.1", validation_alias="OPENAI_MODEL")
     openai_light_model: str = Field(default="gpt-5.1-mini", validation_alias="OPENAI_LIGHT_MODEL")
-    anthropic_model: str = Field(default="claude-4.5-sonnet", validation_alias="ANTHROPIC_MODEL")
+    anthropic_model: str = Field(default="claude-sonnet-4-5", validation_alias="ANTHROPIC_MODEL")
     anthropic_light_model: str = Field(
-        default="claude-4.5-haiku", validation_alias="ANTHROPIC_LIGHT_MODEL",
+        default="claude-haiku-4-5",
+        validation_alias="ANTHROPIC_LIGHT_MODEL",
     )
-    gemini_model: str = Field(default="gemini-3.0-pro", validation_alias="GEMINI_MODEL")
+    gemini_model: str = Field(default="gemini-3-pro-preview", validation_alias="GEMINI_MODEL")
     gemini_light_model: str = Field(default="gemini-2.5-flash", validation_alias="GEMINI_LIGHT_MODEL")
     gemini_thinking_level: str | None = Field(
-        default=None, validation_alias="GEMINI_THINKING_LEVEL",
+        default=None,
+        validation_alias="GEMINI_THINKING_LEVEL",
     )
     log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
     log_destination: Literal["stdout", "file", "both"] = Field(
-        default="stdout", validation_alias="LOG_DESTINATION",
+        default="stdout",
+        validation_alias="LOG_DESTINATION",
     )
     log_file_path: str = Field(default="logs/app.log", validation_alias="LOG_FILE_PATH")
     log_verbose: bool = Field(default=False, validation_alias="LOG_VERBOSE")
     pydantic_ai_api_key: SecretStr = Field(
-        default=SecretStr(""), validation_alias="PYDANTIC_AI_API_KEY",
+        default=SecretStr(""),
+        validation_alias="PYDANTIC_AI_API_KEY",
     )
     pydantic_ai_model: str = Field(
-        default="gpt-5.1", validation_alias="PYDANTIC_AI_MODEL",
+        default="gpt-5.1",
+        validation_alias="PYDANTIC_AI_MODEL",
     )
     pydantic_ai_light_model: str = Field(
-        default="gpt-5.1-mini", validation_alias="PYDANTIC_AI_LIGHT_MODEL",
+        default="gpt-5.1-mini",
+        validation_alias="PYDANTIC_AI_LIGHT_MODEL",
     )
     openai_embedding_model: str = Field(
-        default="text-embedding-3-large", validation_alias="OPENAI_EMBEDDING_MODEL",
+        default="text-embedding-3-large",
+        validation_alias="OPENAI_EMBEDDING_MODEL",
     )
     openai_embedding_model_light: str = Field(
-        default="text-embedding-3-small", validation_alias="OPENAI_EMBEDDING_MODEL_LIGHT",
+        default="text-embedding-3-small",
+        validation_alias="OPENAI_EMBEDDING_MODEL_LIGHT",
     )
     google_embedding_model: str = Field(
-        default="text-embedding-004", validation_alias="GOOGLE_EMBEDDING_MODEL",
+        default="text-embedding-004",
+        validation_alias="GOOGLE_EMBEDDING_MODEL",
     )
     voyage_embedding_model: str = Field(
-        default="voyage-3", validation_alias="VOYAGE_EMBEDDING_MODEL",
+        default="voyage-3",
+        validation_alias="VOYAGE_EMBEDDING_MODEL",
     )
     dspy_model: str = Field(default="gpt-5.1", validation_alias="DSPY_MODEL")
     dspy_light_model: str = Field(default="gpt-5.1-mini", validation_alias="DSPY_LIGHT_MODEL")
     default_temperature: float = Field(default=0.7, validation_alias="DEFAULT_TEMPERATURE")
     postgres_connection_string: SecretStr = Field(
-        default=SecretStr(""), validation_alias="POSTGRES_CONNECTION_STRING",
+        default=SecretStr(""),
+        validation_alias="POSTGRES_CONNECTION_STRING",
     )
     postgres_schema: str = Field(default="", validation_alias="POSTGRES_SCHEMA")
     pgvector_table_name: str = Field(default="", validation_alias="PGVECTOR_TABLE_NAME")
@@ -64,7 +75,10 @@ class Settings(BaseSettings):
     enable_pgroonga: bool = Field(default=False, validation_alias="ENABLE_PGROONGA")
     search_top_k: int = Field(default=5, validation_alias="SEARCH_TOP_K", ge=1)
     search_score_threshold: float = Field(
-        default=0.0, validation_alias="SEARCH_SCORE_THRESHOLD", ge=0.0, le=1.0,
+        default=0.0,
+        validation_alias="SEARCH_SCORE_THRESHOLD",
+        ge=0.0,
+        le=1.0,
     )
     embedding_model: str = Field(default="", validation_alias="EMBEDDING_MODEL")
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")

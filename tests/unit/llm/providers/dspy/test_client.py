@@ -30,9 +30,7 @@ class _MockDsPyLM(SupportsDsPyLM):
         **kwargs: Any,
     ) -> ModelResponse:
         self.calls.append({"prompt": prompt, "messages": messages, **kwargs})
-        text = prompt if prompt is not None else "|".join(
-            message["content"] for message in messages or []
-        )
+        text = prompt if prompt is not None else "|".join(message["content"] for message in messages or [])
         response = SimpleNamespace(
             choices=[SimpleNamespace(message=SimpleNamespace(content=text))],
             model=self.model,

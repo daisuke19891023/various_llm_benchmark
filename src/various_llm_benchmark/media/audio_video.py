@@ -38,4 +38,3 @@ def _read_binary_media(media_path: Path, *, allowed_prefixes: tuple[str, ...]) -
     data = resolved_path.read_bytes()
     encoded = base64.b64encode(data).decode()
     return MediaInput(media_type=media_type, data=encoded)
-

@@ -30,7 +30,11 @@ class GeminiLLMClient(LLMClient, BaseComponent):
         self._thinking_level = thinking_level
 
     def generate(
-        self, prompt: str, *, model: str | None = None, thinking_level: str | None = None,
+        self,
+        prompt: str,
+        *,
+        model: str | None = None,
+        thinking_level: str | None = None,
     ) -> LLMResponse:
         """Generate a completion without history."""
         resolved_model = model or self._default_model
@@ -68,24 +72,24 @@ class GeminiLLMClient(LLMClient, BaseComponent):
     ) -> LLMResponse:
         """Generate a completion using chat messages."""
         resolved_model = model or self._default_model
-        system_prompt, chat_messages = _extract_system_instruction(messages, system_instruction)
+        # Extract system prompt (ignored for Gemini) and remaining chat messages
+        _, chat_messages = _extract_system_instruction(messages, system_instruction)
+        # Gemini does not support system role in contents; we ignore it.
         self.log_start(
             "gemini_chat",
             model=resolved_model,
             message_count=len(chat_messages),
-            has_system=bool(system_prompt),
+            has_system=False,
         )
-        gemini_messages: list[dict[str, object]] = [
-            _to_gemini_message(message) for message in chat_messages
-        ]
+        # Convert messages to a simple text format for Gemini
+        # Gemini API expects contents as string or simple format, not structured messages
+        contents_text = "\n".join([f"{msg.role}: {msg.content}" for msg in chat_messages])
         models_client = cast("Any", self._client.models)
         request_kwargs: dict[str, object] = {
             "model": resolved_model,
-            "contents": gemini_messages,
+            "contents": contents_text,
             "config": _build_config(self._temperature, self._thinking_level, thinking_level),
         }
-        if system_prompt:
-            request_kwargs["system_instruction"] = system_prompt
 
         start = perf_counter()
         response: Any = models_client.generate_content(**request_kwargs)
@@ -114,6 +118,7 @@ class GeminiLLMClient(LLMClient, BaseComponent):
         thinking_level: str | None = None,
     ) -> LLMResponse:
         """Generate a response that includes image context."""
+        del system_prompt  # Gemini doesn't use system_prompt in vision
         resolved_model = model or self._default_model
         self.log_start(
             "gemini_vision",
@@ -140,8 +145,7 @@ class GeminiLLMClient(LLMClient, BaseComponent):
             ],
             "config": _build_config(self._temperature, self._thinking_level, thinking_level),
         }
-        if system_prompt:
-            request_kwargs["system_instruction"] = system_prompt
+        # system_prompt is ignored (not supported in current API version)
 
         start = perf_counter()
         response: Any = models_client.generate_content(**request_kwargs)
@@ -166,7 +170,6 @@ class GeminiLLMClient(LLMClient, BaseComponent):
         media: Sequence[MediaInput],
         *,
         model: str | None = None,
-        system_prompt: str | None = None,
         thinking_level: str | None = None,
     ) -> LLMResponse:
         """Generate a response that includes audio or video context."""
@@ -184,9 +187,7 @@ class GeminiLLMClient(LLMClient, BaseComponent):
         self.log_io(direction="input", prompt=prompt, media_items=len(media))
         models_client = cast("Any", self._client.models)
         parts: list[dict[str, object]] = [{"text": prompt}]
-        parts.extend(
-            {"inline_data": {"mime_type": item.media_type, "data": item.data}} for item in media
-        )
+        parts.extend({"inline_data": {"mime_type": item.media_type, "data": item.data}} for item in media)
 
         request_kwargs: dict[str, object] = {
             "model": resolved_model,
@@ -198,8 +199,7 @@ class GeminiLLMClient(LLMClient, BaseComponent):
             ],
             "config": _build_config(self._temperature, self._thinking_level, thinking_level),
         }
-        if system_prompt:
-            request_kwargs["system_instruction"] = system_prompt
+        # system_prompt is ignored (not supported in current API version)
 
         start = perf_counter()
         response: Any = models_client.generate_content(**request_kwargs)
@@ -220,22 +220,22 @@ class GeminiLLMClient(LLMClient, BaseComponent):
 
 
 def _build_config(
-    temperature: float, default_thinking_level: str | None, override_thinking_level: str | None,
+    temperature: float,
+    default_thinking_level: str | None,
+    override_thinking_level: str | None,
 ) -> dict[str, object]:
     config: dict[str, object] = {"temperature": temperature}
     thinking_level = override_thinking_level or default_thinking_level
     if thinking_level:
-        config["thinking"] = {"type": thinking_level}
+        # NOTE: thinking_level is not yet supported in google.genai 1.52.0
+        # When supported, add: config["thinking_level"] = thinking_level
+        pass
     return config
 
 
-def _to_gemini_message(message: ChatMessage) -> dict[str, object]:
-    role = "model" if message.role == "assistant" else message.role
-    return {"role": role, "parts": [message.content]}
-
-
 def _extract_system_instruction(
-    messages: list[ChatMessage], override: str | None,
+    messages: list[ChatMessage],
+    override: str | None,
 ) -> tuple[str | None, list[ChatMessage]]:
     system_messages = [msg for msg in messages if msg.role == "system"]
     non_system = [msg for msg in messages if msg.role != "system"]

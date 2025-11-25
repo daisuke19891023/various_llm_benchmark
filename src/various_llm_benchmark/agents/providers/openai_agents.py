@@ -9,6 +9,7 @@ from agents.items import ItemHelpers, TResponseInputItem
 from agents.model_settings import ModelSettings
 from agents.run import Runner
 
+from various_llm_benchmark.llm.tools.payloads import to_agents_sdk_tools_payload
 from various_llm_benchmark.logger import BaseComponent
 from various_llm_benchmark.models import (
     ChatMessage,
@@ -16,10 +17,10 @@ from various_llm_benchmark.models import (
     LLMResponse,
     normalize_tool_calls,
 )
-from various_llm_benchmark.llm.tools.payloads import to_agents_sdk_tools_payload
 
 if TYPE_CHECKING:
     from agents.result import RunResult
+
     from various_llm_benchmark.llm.tools.registry import ToolRegistration
 
 

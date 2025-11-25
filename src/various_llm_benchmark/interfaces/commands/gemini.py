@@ -5,12 +5,11 @@ from pathlib import Path
 
 import typer
 from rich.console import Console
-from google.genai import Client
 
 from various_llm_benchmark.interfaces.commands.common import build_messages
-from various_llm_benchmark.media.images import read_image_file
-from various_llm_benchmark.media.audio_video import read_audio_or_video_file
 from various_llm_benchmark.llm.providers.gemini.client import GeminiLLMClient
+from various_llm_benchmark.media.audio_video import read_audio_or_video_file
+from various_llm_benchmark.media.images import read_image_file
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
 from various_llm_benchmark.settings import settings
 
@@ -44,6 +43,8 @@ def _prompt_template() -> PromptTemplate:
 
 
 def _client() -> GeminiLLMClient:
+    from google.genai import Client
+
     client = Client(api_key=settings.gemini_api_key.get_secret_value())
     return GeminiLLMClient(
         client,
@@ -103,9 +104,8 @@ def gemini_vision(
             prompt,
             image_input,
             model=model,
-            system_prompt=_prompt_template().system,
             thinking_level=thinking_level,
-    )
+        )
     console.print(response.content)
 
 
@@ -123,7 +123,6 @@ def gemini_multimodal(
             prompt,
             media_inputs,
             model=model,
-            system_prompt=_prompt_template().system,
             thinking_level=thinking_level,
         )
     console.print(response.content)

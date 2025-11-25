@@ -27,4 +27,3 @@ def test_selector_returns_memory_tools() -> None:
     names = {tool.name for tool in memory_tools}
 
     assert names.issuperset({"memory-append", "memory-search"})
-

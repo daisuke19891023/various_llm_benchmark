@@ -11,8 +11,8 @@ from various_llm_benchmark.interfaces.commands.compare import (
     summarize_results,
 )
 from various_llm_benchmark.interfaces.runner.async_runner import TaskHooks
-from various_llm_benchmark.models import ChatMessage, LLMResponse, ToolCall
 from various_llm_benchmark.llm.protocol import LLMClient
+from various_llm_benchmark.models import ChatMessage, LLMResponse, ToolCall
 
 
 class RecordingHooks(TaskHooks):

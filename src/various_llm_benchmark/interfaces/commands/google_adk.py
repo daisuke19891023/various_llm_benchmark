@@ -2,14 +2,16 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 from rich.console import Console
 
-from various_llm_benchmark.agents.providers import GoogleADKProvider
+if TYPE_CHECKING:
+    from various_llm_benchmark.agents.providers import GoogleADKProvider
+
+
 from various_llm_benchmark.interfaces.commands.common import build_messages
-from various_llm_benchmark.interfaces.commands.web_search_clients import build_gemini_web_search_tool
-from various_llm_benchmark.media.images import read_image_file
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
 from various_llm_benchmark.settings import settings
 
@@ -40,6 +42,8 @@ def _prompt_template() -> PromptTemplate:
 
 
 def _create_provider(*, use_light_model: bool = False) -> GoogleADKProvider:
+    from various_llm_benchmark.agents.providers import GoogleADKProvider
+
     return GoogleADKProvider(
         api_key=settings.gemini_api_key.get_secret_value(),
         model=settings.gemini_light_model if use_light_model else settings.gemini_model,
@@ -72,6 +76,8 @@ def adk_web_search(
     light_model: bool = LIGHT_MODEL_OPTION,
 ) -> None:
     """GeminiのWeb検索ツールをADKと同じキーで呼び出します."""
+    from various_llm_benchmark.interfaces.commands.web_search_clients import build_gemini_web_search_tool
+
     client = build_gemini_web_search_tool(use_light_model=light_model)
     with console.status("Google ADKのWeb検索ツールを呼び出し中...", spinner="dots"):
         response = client.search(prompt, model=model)
@@ -81,6 +87,8 @@ def adk_web_search(
 @adk_app.command("vision")
 def adk_vision(prompt: str, image_path: Path = IMAGE_ARGUMENT, light_model: bool = LIGHT_MODEL_OPTION) -> None:
     """Google ADKによる画像付き推論を実行します."""
+    from various_llm_benchmark.media.images import read_image_file
+
     resolved_path = Path(image_path)
     image_input = read_image_file(resolved_path)
     with console.status("Google ADKで画像解析中...", spinner="dots"):

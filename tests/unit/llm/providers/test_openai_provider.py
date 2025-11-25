@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
 from various_llm_benchmark.llm.providers.openai.client import OpenAILLMClient
 from various_llm_benchmark.models import ChatMessage
@@ -25,7 +25,9 @@ def test_generate_calls_openai(mocker: MockerFixture) -> None:
     response = client.generate("hi")
 
     mock_client.responses.create.assert_called_once_with(
-        model="gpt-default", input="hi", temperature=0.4,
+        model="gpt-default",
+        input="hi",
+        temperature=0.4,
     )
     assert response.content == "hello"
     assert response.model == "gpt-test"

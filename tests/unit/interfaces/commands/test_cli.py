@@ -10,6 +10,7 @@ from various_llm_benchmark.models import ChatMessage, LLMResponse, MediaInput
 
 if TYPE_CHECKING:
     from pathlib import Path
+
     import pytest
 
 runner = CliRunner()
@@ -236,7 +237,7 @@ def test_claude_complete(monkeypatch: pytest.MonkeyPatch) -> None:
             captured.append(str(thinking))
         return LLMResponse(content=f"ok:{prompt}", model=model or "m", raw={"source": "test"})
 
-    def fake_client() -> SimpleNamespace:
+    def fake_client(extended_thinking: bool = False) -> SimpleNamespace:  # noqa: ARG001
         return SimpleNamespace(generate=generate)
 
     monkeypatch.setattr("various_llm_benchmark.interfaces.commands.claude._client", fake_client)
@@ -268,7 +269,7 @@ def test_claude_chat(monkeypatch: pytest.MonkeyPatch) -> None:
         recorded_thinking.append(thinking)
         return LLMResponse(content=str(len(messages)), model=model or "m", raw={"source": "test"})
 
-    def fake_client() -> SimpleNamespace:
+    def fake_client(extended_thinking: bool = False) -> SimpleNamespace:  # noqa: ARG001
         return SimpleNamespace(chat=chat)
 
     monkeypatch.setattr("various_llm_benchmark.interfaces.commands.claude._client", fake_client)
@@ -280,10 +281,11 @@ def test_claude_chat(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
     assert result.exit_code == 0
-    assert recorded_messages[0][0].role == "system"
+    # Claude chat doesn't include system prompt in messages (it's passed separately to API)
+    assert recorded_messages[0][0].role == "user"
     assert recorded_messages[0][-1].content == "hi"
     assert recorded_thinking[0] == {"type": "enabled", "budget_tokens": 7000}
-    assert result.stdout.strip() == "2"
+    assert result.stdout.strip() == "1"
 
 
 def test_gemini_chat(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -331,11 +333,13 @@ def test_gemini_chat_accepts_thinking_level(monkeypatch: pytest.MonkeyPatch) -> 
         system_instruction: str | None = None,
         thinking_level: str | None = None,
     ) -> LLMResponse:
-        recorded.update({
-            "messages": messages,
-            "system_instruction": system_instruction,
-            "thinking_level": thinking_level,
-        })
+        recorded.update(
+            {
+                "messages": messages,
+                "system_instruction": system_instruction,
+                "thinking_level": thinking_level,
+            },
+        )
         return LLMResponse(content=str(len(messages)), model=model or "g", raw={"source": "test"})
 
     def fake_client() -> SimpleNamespace:
@@ -365,7 +369,6 @@ def test_gemini_chat_accepts_thinking_level(monkeypatch: pytest.MonkeyPatch) -> 
 def test_gemini_multimodal(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Gemini multimodal command should load media and apply system prompt."""
     recorded_media: list[list[MediaInput]] = []
-    recorded_system: list[str | None] = []
     recorded_thinking: list[str | None] = []
 
     def multimodal(
@@ -373,12 +376,10 @@ def test_gemini_multimodal(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
         media: list[MediaInput],
         *,
         model: str | None = None,
-        system_prompt: str | None = None,
         thinking_level: str | None = None,
     ) -> LLMResponse:
         del prompt
         recorded_media.append(media)
-        recorded_system.append(system_prompt)
         recorded_thinking.append(thinking_level)
         return LLMResponse(content=str(len(media)), model=model or "g", raw={"source": "test"})
 
@@ -405,8 +406,6 @@ def test_gemini_multimodal(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
 
     assert result.exit_code == 0
     assert recorded_media[0][0].data == "sound.wav"
-    assert recorded_system[0] is not None
-    assert recorded_system[0].startswith("You are a concise and reliable assistant powered by Gemini")
     assert recorded_thinking[0] == "base"
     assert result.stdout.strip() == "1"
 

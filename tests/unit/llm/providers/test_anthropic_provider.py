@@ -25,7 +25,7 @@ def test_generate_calls_anthropic(mocker: MockerFixture) -> None:
     mock_client.messages.create.assert_called_once_with(
         model="claude-default",
         messages=[{"role": "user", "content": "hello"}],
-        max_tokens=1024,
+        max_tokens=5001,  # budget_tokens + 1 when thinking is enabled
         temperature=0.3,
         thinking={"type": "enabled", "budget_tokens": 5000},
     )
@@ -51,7 +51,7 @@ def test_chat_with_history(mocker: MockerFixture) -> None:
     mock_client.messages.create.assert_called_once_with(
         model="claude-default",
         messages=[{"role": "user", "content": "元気?"}],
-        max_tokens=1024,
+        max_tokens=1024,  # max(1024, budget_tokens + 1) = max(1024, 1001) = 1024
         temperature=0.7,
         thinking={"type": "enabled", "budget_tokens": 1000},
     )

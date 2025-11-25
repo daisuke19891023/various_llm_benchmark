@@ -160,7 +160,7 @@ uv run various-llm-benchmark pydantic-ai chat "要件を整理して" \
 uv run various-llm-benchmark pydantic-ai vision "この画像の内容を要約して" --image-path ./path/to/image.png
 ```
 
-- モデルデフォルト: OpenAIは`gpt-5.1` (軽量: `gpt-5.1-mini`)、Claudeは`claude-4.5-sonnet` (軽量: `claude-4.5-haiku`)、Gemini/Google ADKは`gemini-3.0-pro` (軽量: `gemini-2.5-flash`)、Pydantic AIは`gpt-5.1` (軽量: `gpt-5.1-mini`)。
+- モデルデフォルト: OpenAIは`gpt-5.1` (軽量: `gpt-5.1-mini`)、Claudeは`claude-sonnet-4-5` (軽量: `claude-haiku-4-5`)、Gemini/Google ADKは`gemini-3.0-pro` (軽量: `gemini-2.5-flash`)、Pydantic AIは`gpt-5.1` (軽量: `gpt-5.1-mini`)。
 - DsPyはOpenAIモデルを利用し、デフォルト`gpt-5.1` (軽量: `gpt-5.1-mini`)を使用します。
 - `--light-model`オプションで軽量モデルを選択できます（環境変数`OPENAI_LIGHT_MODEL` / `ANTHROPIC_LIGHT_MODEL` / `GEMINI_LIGHT_MODEL` / `DSPY_LIGHT_MODEL` / `PYDANTIC_AI_LIGHT_MODEL`も利用可能）。
 - Gemini 3.0 では reasoning 出力の深さを決める thinking level を指定できます。環境変数`GEMINI_THINKING_LEVEL`または`gemini`コマンドの`--thinking-level`オプションで設定してください。

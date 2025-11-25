@@ -2,20 +2,18 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 from rich.console import Console
 
+if TYPE_CHECKING:
+    from various_llm_benchmark.llm.providers.dspy import DsPyLLMClient
+
+
 from various_llm_benchmark.interfaces.commands.common import build_messages
-from various_llm_benchmark.llm.providers.dspy import DsPyLLMClient
-from various_llm_benchmark.llm.providers.dspy.optimizer import (
-    PromptOptimizationResult,
-    load_prompt_tuning_examples,
-    optimize_prompt,
-)
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
 from various_llm_benchmark.settings import settings
-
 
 dspy_app = typer.Typer(help="DsPyモデルを呼び出します。")
 console = Console()
@@ -38,6 +36,8 @@ def _prompt_template() -> PromptTemplate:
 
 
 def _client() -> DsPyLLMClient:
+    from various_llm_benchmark.llm.providers.dspy import DsPyLLMClient
+
     default_model = settings.dspy_model
     return DsPyLLMClient(
         default_model,
@@ -96,6 +96,12 @@ def dspy_optimize(
     light_model: bool = LIGHT_MODEL_OPTION,
 ) -> None:
     """DsPy Optimizerを使ってプロンプトをチューニングします."""
+    from various_llm_benchmark.llm.providers.dspy.optimizer import (
+        PromptOptimizationResult,
+        load_prompt_tuning_examples,
+        optimize_prompt,
+    )
+
     dataset = Path(dataset_path)
     examples = load_prompt_tuning_examples(dataset)
     with console.status("DsPyでプロンプトを最適化中...", spinner="dots"):

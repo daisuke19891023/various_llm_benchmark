@@ -1,14 +1,14 @@
 """Safe code execution tool registration."""
 
+import runpy
+import tempfile
+import typing as t
 from collections.abc import Iterable
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import dataclass
-import typing as t
-from typing import Any, TypeGuard
 from io import StringIO
-import runpy
-import tempfile
 from pathlib import Path
+from typing import Any, TypeGuard
 
 from google.genai import types as genai_types
 
@@ -191,9 +191,7 @@ def _register_tool() -> None:
             "required": ["language", "code"],
         },
     )
-    description = (
-        "制限されたサンドボックスでPythonコードを実行し、必要に応じて他のツール呼び出しを組み合わせる"
-    )
+    description = "制限されたサンドボックスでPythonコードを実行し、必要に応じて他のツール呼び出しを組み合わせる"
     registration = ToolRegistration(
         id="code/execute",
         name="code-execute",
@@ -212,4 +210,3 @@ def _register_tool() -> None:
 
 
 _register_tool()
-

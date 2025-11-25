@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from various_llm_benchmark.llm.protocol import LLMClient
 from various_llm_benchmark.logger import BaseComponent
@@ -18,6 +18,28 @@ if TYPE_CHECKING:
     from anthropic.types import MessageParam
 
 
+AnthropicModelName = Literal[
+    "claude-3-7-sonnet-latest",
+    "claude-3-7-sonnet-20250219",
+    "claude-3-5-haiku-latest",
+    "claude-3-5-haiku-20241022",
+    "claude-haiku-4-5",
+    "claude-haiku-4-5-20251001",
+    "claude-sonnet-4-20250514",
+    "claude-sonnet-4-0",
+    "claude-4-sonnet-20250514",
+    "claude-sonnet-4-5",
+    "claude-sonnet-4-5-20250929",
+    "claude-opus-4-0",
+    "claude-opus-4-20250514",
+    "claude-4-opus-20250514",
+    "claude-opus-4-1-20250805",
+    "claude-3-opus-latest",
+    "claude-3-opus-20240229",
+    "claude-3-haiku-20240307",
+]
+
+
 class AnthropicLLMClient(LLMClient, BaseComponent):
     """Adapter for Anthropic Messages API."""
 
@@ -31,7 +53,7 @@ class AnthropicLLMClient(LLMClient, BaseComponent):
         self,
         prompt: str,
         *,
-        model: str | None = None,
+        model: AnthropicModelName | str | None = None,
         thinking: Mapping[str, object] | None = None,
     ) -> LLMResponse:
         """Generate a completion without history."""
@@ -67,7 +89,7 @@ class AnthropicLLMClient(LLMClient, BaseComponent):
         self,
         messages: list[ChatMessage],
         *,
-        model: str | None = None,
+        model: AnthropicModelName | str | None = None,
         thinking: Mapping[str, object] | None = None,
     ) -> LLMResponse:
         """Generate a completion using chat messages."""
@@ -106,7 +128,7 @@ class AnthropicLLMClient(LLMClient, BaseComponent):
         prompt: str,
         image: ImageInput,
         *,
-        model: str | None = None,
+        model: AnthropicModelName | str | None = None,
         system_prompt: str | None = None,
     ) -> LLMResponse:
         """Generate a completion using an image payload."""
@@ -199,10 +221,18 @@ def _build_messages_kwargs(
     temperature: float,
     thinking: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
+    # Determine a safe max_tokens value. Anthropic requires max_tokens > budget_tokens when thinking is enabled.
+    default_max = 1024
+    if thinking is not None:
+        # Extract budget_tokens if present
+        budget = thinking.get("budget_tokens") if isinstance(thinking, dict) else None
+        if isinstance(budget, int):
+            # Ensure max_tokens exceeds budget by at least 1 token
+            default_max = max(default_max, budget + 1)
     request_kwargs: dict[str, object] = {
         "model": model,
         "messages": messages,
-        "max_tokens": 1024,
+        "max_tokens": default_max,
         "temperature": temperature,
     }
     if thinking is not None:

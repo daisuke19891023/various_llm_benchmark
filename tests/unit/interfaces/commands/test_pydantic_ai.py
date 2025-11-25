@@ -16,11 +16,15 @@ def test_create_provider_uses_settings(monkeypatch: Any) -> None:
 
     class DummyProvider:
         def __init__(
-            self, *, model: str, system_prompt: str | None, temperature: float,
+            self,
+            *,
+            model: str,
+            system_prompt: str | None,
+            temperature: float,
         ) -> None:
             created.update(model=model, system_prompt=system_prompt, temperature=temperature)
 
-    monkeypatch.setattr(pydantic_ai, "PydanticAIAgentProvider", DummyProvider)
+    monkeypatch.setattr("various_llm_benchmark.agents.providers.PydanticAIAgentProvider", DummyProvider)
     monkeypatch.setattr(pydantic_ai.settings, "pydantic_ai_model", "primary-model")
     monkeypatch.setattr(pydantic_ai.settings, "pydantic_ai_light_model", "light-model")
     monkeypatch.setattr(pydantic_ai.settings, "default_temperature", 0.35)

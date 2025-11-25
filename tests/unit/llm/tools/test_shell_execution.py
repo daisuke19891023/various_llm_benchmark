@@ -73,4 +73,3 @@ def test_shell_tool_registered_with_provider_overrides() -> None:
 
     assert openai_payload == [{"type": "bash"}]
     assert anthropic_payload == [{"type": "bash", "name": "shell-execute"}]
-

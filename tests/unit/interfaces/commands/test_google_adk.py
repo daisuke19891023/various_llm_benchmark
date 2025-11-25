@@ -91,7 +91,10 @@ def test_google_adk_web_search(monkeypatch: pytest.MonkeyPatch) -> None:
 
         return Tool()
 
-    monkeypatch.setattr(google_adk_cmd, "build_gemini_web_search_tool", fake_builder)
+    monkeypatch.setattr(
+        "various_llm_benchmark.interfaces.commands.web_search_clients.build_gemini_web_search_tool",
+        fake_builder,
+    )
 
     result = runner.invoke(cli.app, ["google-adk", "web-search", "topic", "--model", "gemini-3.0-pro"])
 

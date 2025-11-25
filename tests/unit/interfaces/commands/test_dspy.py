@@ -78,8 +78,8 @@ def test_dspy_optimize_runs_optimizer(monkeypatch: pytest.MonkeyPatch, tmp_path:
         assert prompt_template is not None
         return SimpleNamespace(base_score=0.3, optimized_score=0.9, trainset_size=1)
 
-    monkeypatch.setattr(dspy_commands, "load_prompt_tuning_examples", load_examples)
-    monkeypatch.setattr(dspy_commands, "optimize_prompt", optimize)
+    monkeypatch.setattr("various_llm_benchmark.llm.providers.dspy.optimizer.load_prompt_tuning_examples", load_examples)
+    monkeypatch.setattr("various_llm_benchmark.llm.providers.dspy.optimizer.optimize_prompt", optimize)
 
     result = runner.invoke(
         app,
