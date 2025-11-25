@@ -6,6 +6,9 @@ from typing import Literal
 import typer
 from rich.console import Console
 
+from various_llm_benchmark.interfaces.commands.code_execution_clients import (
+    resolve_code_execution_client,
+)
 from various_llm_benchmark.interfaces.commands.retriever_clients import resolve_retriever_client
 from various_llm_benchmark.interfaces.commands.web_search_clients import resolve_web_search_client
 from various_llm_benchmark.llm.tools.registry import ToolCategory
@@ -101,3 +104,17 @@ def retriever(
             timeout=timeout,
         )
     console.print_json(json.dumps(result, ensure_ascii=False))
+
+
+@tools_app.command("code-execution")
+def code_execution(
+    prompt: str,
+    provider: ProviderName = PROVIDER_OPTION,
+    model: str | None = MODEL_OPTION,
+    light_model: bool = LIGHT_MODEL_OPTION,
+) -> None:
+    """コード実行ツールを有効化したLLM呼び出しを行います."""
+    executor = resolve_code_execution_client(provider, use_light_model=light_model)
+    with console.status("コード実行ツールを呼び出し中...", spinner="dots"):
+        response = executor(prompt, model=model)
+    console.print(response.content)
