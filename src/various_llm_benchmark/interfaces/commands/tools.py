@@ -7,6 +7,11 @@ import typer
 from rich.console import Console
 
 from various_llm_benchmark.interfaces.commands.retriever_clients import resolve_retriever_client
+from various_llm_benchmark.interfaces.commands.shell_clients import (
+    ShellProviderName,
+    ShellResult,
+    resolve_shell_client,
+)
 from various_llm_benchmark.interfaces.commands.web_search_clients import resolve_web_search_client
 from various_llm_benchmark.llm.tools.registry import ToolCategory
 
@@ -17,12 +22,27 @@ RetrieverProviderName = Literal["openai", "google", "voyage"]
 tools_app = typer.Typer(help="LLMの組み込みツール呼び出しを実行します。")
 console = Console()
 
+ARG_OPTION: list[str] | None = typer.Option(
+    None,
+    "--arg",
+    "-a",
+    help="シェルコマンドに渡す引数。複数指定できます。",
+    show_default=False,
+)
+
 PROVIDER_OPTION: ProviderName = typer.Option(
     "openai",
     "--provider",
     "-p",
     case_sensitive=False,
     help="利用するプロバイダー (openai / anthropic / gemini)",
+)
+SHELL_PROVIDER_OPTION: ShellProviderName = typer.Option(
+    "openai",
+    "--provider",
+    "-p",
+    case_sensitive=False,
+    help="シェルツールで利用するプロバイダー (openai / anthropic)",
 )
 
 RETRIEVER_PROVIDER_OPTION: RetrieverProviderName = typer.Option(
@@ -58,6 +78,12 @@ TIMEOUT_OPTION: float = typer.Option(
     5.0,
     help="DB検索や埋め込み取得のタイムアウト (秒)",
     min=0.0,
+)
+SHELL_TIMEOUT_OPTION: float = typer.Option(
+    5.0,
+    "--timeout-seconds",
+    help="シェルコマンド実行のタイムアウト (秒)",
+    min=0.01,
 )
 
 
@@ -101,3 +127,21 @@ def retriever(
             timeout=timeout,
         )
     console.print_json(json.dumps(result, ensure_ascii=False))
+
+
+@tools_app.command("shell")
+def shell(
+    command: str,
+    args: list[str] | None = ARG_OPTION,
+    provider: ShellProviderName = SHELL_PROVIDER_OPTION,
+    timeout_seconds: float = SHELL_TIMEOUT_OPTION,
+) -> None:
+    """許可されたシェルコマンドを組み込みツール経由で実行します."""
+    executor = resolve_shell_client(provider)
+    with console.status(f"{provider}のシェルツールを実行中...", spinner="dots"):
+        result: ShellResult = executor(command, args=args, timeout_seconds=timeout_seconds)
+
+    stdout = result["stdout"]
+    stderr = result["stderr"]
+    output = stdout or stderr
+    console.print(output)
