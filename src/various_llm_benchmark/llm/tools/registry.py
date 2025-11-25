@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import typing
 from enum import StrEnum
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -34,12 +34,21 @@ class ToolRegistration(BaseModel):
     id: str = Field(min_length=1)
     name: str = Field(min_length=1)
     description: str
-    input_schema: dict[str, Any]
+    input_schema: dict[str, object] = Field(default_factory=dict)
+    input_model: type[BaseModel] | None = None
     tags: set[str] = Field(default_factory=set)
     native_type: NativeToolType | None = None
     provider_overrides: dict[str, object] = Field(default_factory=dict)
     handler: typing.Callable[..., Any]
     category: ToolCategory
+
+    def model_post_init(self, __context: Any, /) -> None:
+        """Populate missing schemas from the input model."""
+        if self.input_model is not None:
+            self.input_schema = cast("dict[str, object]", self.input_model.model_json_schema())
+        if not self.input_schema:
+            msg = "input_schema is required when input_model is not provided."
+            raise ValueError(msg)
 
 
 WEB_SEARCH_TAG = "web_search"

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from functools import lru_cache, partial
-from typing import TYPE_CHECKING, Literal, Protocol, cast
+from functools import lru_cache
+from typing import TYPE_CHECKING, Literal, Protocol, cast, overload
 
 if TYPE_CHECKING:
     from various_llm_benchmark.llm.tools.web_search import (
@@ -21,6 +21,7 @@ from various_llm_benchmark.llm.tools.registry import (
     ToolRegistration,
     register_tool,
 )
+from various_llm_benchmark.llm.tools.types import WebSearchInput
 from various_llm_benchmark.prompts.prompt import PromptTemplate, load_provider_prompt
 from various_llm_benchmark.settings import settings
 
@@ -33,13 +34,27 @@ ProviderName = Literal["openai", "anthropic", "gemini"]
 class WebSearchHandler(Protocol):
     """Callable that executes a web search-enabled LLM request."""
 
+    @overload
     def __call__(
         self,
-        prompt: str,
+        request: WebSearchInput,
         *,
         model: str | None = None,
         use_light_model: bool = False,
     ) -> LLMResponse:
+        ...
+
+    @overload
+    def __call__(
+        self,
+        request: str,
+        *,
+        model: str | None = None,
+        use_light_model: bool = False,
+    ) -> LLMResponse:
+        ...
+
+    def __call__(self, *args: object, **kwargs: object) -> LLMResponse:
         """Execute a search request."""
         ...
 
@@ -47,23 +62,34 @@ class WebSearchHandler(Protocol):
 class WebSearchExecutor(Protocol):
     """Callable that runs a web search for a prompt."""
 
-    def __call__(self, prompt: str, *, model: str | None = None) -> LLMResponse:
+    @overload
+    def __call__(
+        self,
+        request: WebSearchInput,
+        *,
+        model: str | None = None,
+        use_light_model: bool | None = None,
+    ) -> LLMResponse:
+        ...
+
+    @overload
+    def __call__(
+        self,
+        request: str,
+        *,
+        model: str | None = None,
+        use_light_model: bool | None = None,
+    ) -> LLMResponse:
+        ...
+
+    def __call__(self, *args: object, **kwargs: object) -> LLMResponse:
         """Execute a search request."""
         ...
 
 
-WEB_SEARCH_INPUT_SCHEMA: dict[str, object] = {
-    "type": "object",
-    "properties": {
-        "prompt": {"type": "string", "description": "ユーザーからの検索依頼"},
-        "model": {"type": "string", "description": "明示的に利用するモデル"},
-        "use_light_model": {
-            "type": "boolean",
-            "description": "軽量モデルを利用する場合にtrue",
-        },
-    },
-    "required": ["prompt"],
-}
+WEB_SEARCH_INPUT_SCHEMA: dict[str, object] = cast(
+    "dict[str, object]", WebSearchInput.model_json_schema(),
+)
 
 
 @lru_cache(maxsize=1)
@@ -147,6 +173,7 @@ def _register_web_search_tool(
             name=f"{provider}-web-search",
             description=description,
             input_schema=WEB_SEARCH_INPUT_SCHEMA,
+            input_model=WebSearchInput,
             tags={WEB_SEARCH_TAG, f"provider:{provider}"},
             native_type=NativeToolType.WEB_SEARCH,
             handler=handler,
@@ -155,34 +182,66 @@ def _register_web_search_tool(
     )
 
 
+def _normalize_web_search_input(
+    request: str | WebSearchInput,
+    *,
+    model: str | None,
+    use_light_model: bool,
+) -> tuple[str, str | None, bool]:
+    if isinstance(request, WebSearchInput):
+        resolved_model = model if model is not None else request.model
+        resolved_use_light_model = (
+            request.use_light_model
+            if request.use_light_model is not None
+            else use_light_model
+        )
+        return request.prompt, resolved_model, bool(resolved_use_light_model)
+    return request, model, use_light_model
+
+
 def _openai_web_search(
-    prompt: str,
+    request: str | WebSearchInput,
     *,
     model: str | None = None,
     use_light_model: bool = False,
 ) -> LLMResponse:
-    tool = build_openai_web_search_tool(use_light_model=use_light_model)
-    return tool.search(prompt, model=model)
+    prompt, resolved_model, resolved_use_light_model = _normalize_web_search_input(
+        request,
+        model=model,
+        use_light_model=use_light_model,
+    )
+    tool = build_openai_web_search_tool(use_light_model=resolved_use_light_model)
+    return tool.search(prompt, model=resolved_model)
 
 
 def _anthropic_web_search(
-    prompt: str,
+    request: str | WebSearchInput,
     *,
     model: str | None = None,
     use_light_model: bool = False,
 ) -> LLMResponse:
-    tool = build_anthropic_web_search_tool(use_light_model=use_light_model)
-    return tool.search(prompt, model=model)
+    prompt, resolved_model, resolved_use_light_model = _normalize_web_search_input(
+        request,
+        model=model,
+        use_light_model=use_light_model,
+    )
+    tool = build_anthropic_web_search_tool(use_light_model=resolved_use_light_model)
+    return tool.search(prompt, model=resolved_model)
 
 
 def _gemini_web_search(
-    prompt: str,
+    request: str | WebSearchInput,
     *,
     model: str | None = None,
     use_light_model: bool = False,
 ) -> LLMResponse:
-    tool = build_gemini_web_search_tool(use_light_model=use_light_model)
-    return tool.search(prompt, model=model)
+    prompt, resolved_model, resolved_use_light_model = _normalize_web_search_input(
+        request,
+        model=model,
+        use_light_model=use_light_model,
+    )
+    tool = build_gemini_web_search_tool(use_light_model=resolved_use_light_model)
+    return tool.search(prompt, model=resolved_model)
 
 
 def _ensure_web_search_tools_registered() -> None:
@@ -231,4 +290,18 @@ def resolve_web_search_client(
         ids=[_tool_id(provider)],
     )
     handler = cast("WebSearchHandler", registration.handler)
-    return cast("WebSearchExecutor", partial(handler, use_light_model=use_light_model))
+
+    def executor(
+        request: str | WebSearchInput,
+        *,
+        model: str | None = None,
+        use_light_model_override: bool | None = None,
+    ) -> LLMResponse:
+        resolved_use_light_model = (
+            use_light_model_override
+            if use_light_model_override is not None
+            else use_light_model
+        )
+        return handler(request, model=model, use_light_model=resolved_use_light_model)
+
+    return cast("WebSearchExecutor", executor)

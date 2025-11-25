@@ -11,6 +11,7 @@ from various_llm_benchmark.llm.tools.registry import (
     list_tools,
     register_tool,
 )
+from various_llm_benchmark.llm.tools.types import WebSearchInput
 
 
 def _noop_handler() -> None:
@@ -88,3 +89,18 @@ def test_category_mismatch_raises_lookup_error() -> None:
 
     with pytest.raises(LookupError):
         get_tool("mismatch/tool", category=ToolCategory.EXTERNAL)
+
+
+def test_input_model_populates_schema() -> None:
+    """入力モデルからスキーマが自動生成される。."""
+    registration = ToolRegistration(
+        id="web-search/openai",
+        name="openai-web-search",
+        description="OpenAI web search",
+        tags=set(),
+        input_model=WebSearchInput,
+        handler=_noop_handler,
+        category=ToolCategory.BUILTIN,
+    )
+
+    assert registration.input_schema == WebSearchInput.model_json_schema()
