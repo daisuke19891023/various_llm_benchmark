@@ -87,6 +87,7 @@ def _shared_pre_chain(app_settings: Settings) -> list[Processor]:
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
         structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
     ]
 
     if app_settings.log_verbose:
