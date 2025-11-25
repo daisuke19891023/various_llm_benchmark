@@ -221,3 +221,101 @@ def test_tools_retriever(monkeypatch: pytest.MonkeyPatch) -> None:
         },
     ]
     assert "documents" in result.stdout
+
+
+def test_tools_shell_openai(monkeypatch: pytest.MonkeyPatch) -> None:
+    """OpenAIプロバイダーでシェルツールが呼び出されることを確認."""
+    captured: list[dict[str, object]] = []
+
+    def fake_resolver(provider: str) -> object:
+        assert provider == "openai"
+
+        def executor(command: str, *, args: list[str] | None, timeout_seconds: float) -> dict[str, object]:
+            captured.append(
+                {
+                    "provider": provider,
+                    "command": command,
+                    "args": args,
+                    "timeout": timeout_seconds,
+                },
+            )
+            return {"stdout": "ok", "stderr": "", "exit_code": 0}
+
+        return executor
+
+    monkeypatch.setattr(
+        "various_llm_benchmark.interfaces.commands.tools.resolve_shell_client",
+        fake_resolver,
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "tools",
+            "shell",
+            "ls",
+            "--arg",
+            "-a",
+            "--timeout-seconds",
+            "3.5",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured == [
+        {
+            "provider": "openai",
+            "command": "ls",
+            "args": ["-a"],
+            "timeout": 3.5,
+        },
+    ]
+    assert "ok" in result.stdout
+
+
+def test_tools_shell_anthropic(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Anthropicプロバイダーでシェルツールが呼び出されることを確認."""
+    captured: list[dict[str, object]] = []
+
+    def fake_resolver(provider: str) -> object:
+        assert provider == "anthropic"
+
+        def executor(command: str, *, args: list[str] | None, timeout_seconds: float) -> dict[str, object]:
+            captured.append(
+                {
+                    "provider": provider,
+                    "command": command,
+                    "args": args,
+                    "timeout": timeout_seconds,
+                },
+            )
+            return {"stdout": "listed", "stderr": "", "exit_code": 0}
+
+        return executor
+
+    monkeypatch.setattr(
+        "various_llm_benchmark.interfaces.commands.tools.resolve_shell_client",
+        fake_resolver,
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "tools",
+            "shell",
+            "ls",
+            "--provider",
+            "anthropic",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured == [
+        {
+            "provider": "anthropic",
+            "command": "ls",
+            "args": None,
+            "timeout": 5.0,
+        },
+    ]
+    assert "listed" in result.stdout
