@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Literal
 
@@ -50,15 +51,37 @@ def test_configure_logging_writes_structured_file(tmp_path: Path, monkeypatch: A
 
 
 def test_base_component_logs_start_event(tmp_path: Path, capsys: Any) -> None:
-    """BaseComponent emits structured start events with metadata."""
+    """BaseComponent emits readable console logs with metadata."""
     settings = _settings(tmp_path, destination="stdout")
     configure_logging(settings, force=True)
     component = SampleComponent()
 
     component.log_start("sample", note="example")
-    stdout = capsys.readouterr().out.splitlines()[-1]
-    payload = json.loads(stdout)
-    assert payload["event"] == "start"
-    assert payload["component"] == "SampleComponent"
-    assert payload["action"] == "sample"
-    assert payload["note"] == "example"
+    stdout = capsys.readouterr().out
+    plain_stdout = re.sub(r"\x1b\[[\d;]*m", "", stdout)
+
+    assert "SampleComponent" in plain_stdout
+    assert "start" in plain_stdout
+    assert "action" in plain_stdout
+    assert "sample" in plain_stdout
+    assert "note" in plain_stdout
+    assert "example" in plain_stdout
+    assert "INFO" in plain_stdout
+    assert "\x1b[32m" in stdout
+
+
+def test_log_io_emphasizes_direction(tmp_path: Path, capsys: Any) -> None:
+    """log_io should render direction markers for readability."""
+    settings = _settings(tmp_path, destination="stdout")
+    configure_logging(settings, force=True)
+    component = SampleComponent()
+
+    component.log_io(direction="input", prompt="hello world")
+    stdout = capsys.readouterr().out
+    plain_stdout = re.sub(r"\x1b\[[\d;]*m", "", stdout)
+
+    assert "io" in plain_stdout
+    assert "prompt" in plain_stdout
+    assert "hello world" in plain_stdout
+    assert "⬅ input" in plain_stdout
+    assert "\x1b[36m" in stdout
