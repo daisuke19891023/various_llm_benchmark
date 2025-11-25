@@ -106,7 +106,7 @@ def _build_handlers(app_settings: Settings) -> list[logging.Handler]:
 
     if app_settings.log_destination in {"stdout", "both"}:
         console_handler = RichHandler(
-            console=Console(file=sys.stdout, force_terminal=True),
+            console=Console(file=sys.stdout, force_terminal=True, width=200),
             rich_tracebacks=True,
             show_time=False,
             markup=True,
