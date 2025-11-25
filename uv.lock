@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version == '3.13.*'",
@@ -5299,6 +5299,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
+    { name = "rich" },
     { name = "structlog" },
     { name = "typer" },
     { name = "ulid" },
@@ -5362,6 +5363,7 @@ requires-dist = [
     { name = "python-semantic-release", marker = "extra == 'dev'", specifier = ">=10.4.1" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "responses", marker = "extra == 'dev'", specifier = ">=0.25.8" },
+    { name = "rich", specifier = ">=14.2.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.14.1" },
     { name = "scalene", marker = "extra == 'dev'", specifier = ">=1.5.55" },
     { name = "structlog", specifier = ">=25.5.0" },
