@@ -9,9 +9,9 @@ def test_resolve_shell_client_executes_allowlisted_command() -> None:
 
     result = executor("echo", ["hello"], timeout_seconds=1)
 
-    assert cast(int, result["exit_code"]) == 0
-    assert cast(str, result["stderr"]) == ""
-    assert cast(str, result["stdout"]).strip() == "hello"
+    assert cast("int", result["exit_code"]) == 0
+    assert cast("str", result["stderr"]) == ""
+    assert cast("str", result["stdout"]).strip() == "hello"
 
 
 def test_resolve_shell_client_accepts_anthropic_provider() -> None:
@@ -20,5 +20,5 @@ def test_resolve_shell_client_accepts_anthropic_provider() -> None:
 
     result = executor("echo", ["hi"], timeout_seconds=1)
 
-    assert cast(int, result["exit_code"]) == 0
-    assert cast(str, result["stdout"]).strip() == "hi"
+    assert cast("int", result["exit_code"]) == 0
+    assert cast("str", result["stdout"]).strip() == "hi"

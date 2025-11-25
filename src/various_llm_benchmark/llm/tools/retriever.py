@@ -47,6 +47,16 @@ class RetrievedDocument(BaseModel):
     source: str = Field(min_length=1)
 
 
+def _empty_retrieved_documents() -> list[RetrievedDocument]:
+    return []
+
+
+class RetrieverResponse(BaseModel):
+    """Container for retriever search results."""
+
+    documents: list[RetrievedDocument] = Field(default_factory=_empty_retrieved_documents)
+
+
 class SupportsEmbeddingCreate(Protocol):
     """Minimal interface for an embeddings client."""
 
@@ -814,6 +824,7 @@ __all__ = [
     "EmbeddingProvider",
     "RetrievedDocument",
     "RetrieverError",
+    "RetrieverResponse",
     "create_postgres_pool",
     "generate_embedding",
     "generate_embeddings_batch",
