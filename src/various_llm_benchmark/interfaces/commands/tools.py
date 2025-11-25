@@ -113,7 +113,12 @@ def code_execution(
     model: str | None = MODEL_OPTION,
     light_model: bool = LIGHT_MODEL_OPTION,
 ) -> None:
-    """コード実行ツールを有効化したLLM呼び出しを行います."""
+    """ネイティブなコード実行ツールを有効化したLLM呼び出しを行います.
+
+    ``llm/tools/code_execution.py`` で登録しているサンドボックス実行は、Agent経由の
+    ツール呼び出し用の安全なローカル実行を担います。このサブコマンドでは各プロ
+    バイダーが提供するネイティブコード実行機能の疎通を直接確認します。
+    """
     executor = resolve_code_execution_client(provider, use_light_model=light_model)
     with console.status("コード実行ツールを呼び出し中...", spinner="dots"):
         response = executor(prompt, model=model)
