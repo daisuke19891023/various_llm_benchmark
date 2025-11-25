@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from threading import Lock
+from typing import cast
 
 from various_llm_benchmark.llm.tools.registry import ToolCategory, ToolRegistration, register_tool
 
@@ -103,7 +104,7 @@ def _register_tools() -> None:
             id="memory/append",
             name="memory-append",
             description="インメモリストアへメッセージを追記する",
-            input_schema=append_schema,
+            input_schema=cast("dict[str, object]", append_schema),
             tags={"memory", "builtin"},
             handler=append_memory,
             category=ToolCategory.BUILTIN,
@@ -112,7 +113,7 @@ def _register_tools() -> None:
             id="memory/search",
             name="memory-search",
             description="インメモリストアからメッセージを検索する",
-            input_schema=search_schema,
+            input_schema=cast("dict[str, object]", search_schema),
             tags={"memory", "builtin"},
             handler=search_memory,
             category=ToolCategory.BUILTIN,
