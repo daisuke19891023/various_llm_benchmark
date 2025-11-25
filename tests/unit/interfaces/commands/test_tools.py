@@ -30,7 +30,11 @@ def test_tools_web_search_openai(monkeypatch: pytest.MonkeyPatch) -> None:
 
         def search(prompt: str, model: str | None = None) -> LLMResponse:
             captured.append((prompt, model))
-            return LLMResponse(content="openai-result", model=model or "m", raw={"source": "test"})
+            return LLMResponse(
+                content="Claude Opus 4.5 が最新モデルです。",
+                model=model or "m",
+                raw={"source": "test"},
+            )
 
         return search
 
@@ -39,11 +43,22 @@ def test_tools_web_search_openai(monkeypatch: pytest.MonkeyPatch) -> None:
         fake_resolver,
     )
 
-    result = runner.invoke(app, ["tools", "web-search", "find this", "--model", "x", "--provider", "openai"])
+    result = runner.invoke(
+        app,
+        [
+            "tools",
+            "web-search",
+            "Claudeの最新モデルは?",
+            "--model",
+            "x",
+            "--provider",
+            "openai",
+        ],
+    )
 
     assert result.exit_code == 0
-    assert captured == [("find this", "x")]
-    assert "openai-result" in result.stdout
+    assert captured == [("Claudeの最新モデルは?", "x")]
+    assert "Claude Opus 4.5" in result.stdout
 
 
 def test_tools_web_search_anthropic(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -62,7 +77,11 @@ def test_tools_web_search_anthropic(monkeypatch: pytest.MonkeyPatch) -> None:
 
         def search(prompt: str, model: str | None = None) -> LLMResponse:
             captured.append((prompt, model))
-            return LLMResponse(content="claude-result", model=model or "m", raw={"source": "test"})
+            return LLMResponse(
+                content="Claude Opus 4.5 が最新モデルです。",
+                model=model or "m",
+                raw={"source": "test"},
+            )
 
         return search
 
@@ -73,12 +92,65 @@ def test_tools_web_search_anthropic(monkeypatch: pytest.MonkeyPatch) -> None:
 
     result = runner.invoke(
         app,
-        ["tools", "web-search", "docs", "--provider", "anthropic", "--light-model"],
+        [
+            "tools",
+            "web-search",
+            "Claudeの最新モデルを教えて",
+            "--provider",
+            "anthropic",
+            "--light-model",
+        ],
     )
 
     assert result.exit_code == 0
-    assert captured == [("docs", None)]
-    assert "claude-result" in result.stdout
+    assert captured == [("Claudeの最新モデルを教えて", None)]
+    assert "Claude Opus 4.5" in result.stdout
+
+
+def test_tools_web_search_gemini(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Gemini provider should route the request to the resolver."""
+    captured: list[tuple[str, str | None]] = []
+
+    def fake_resolver(
+        provider: str,
+        *,
+        category: ToolCategory = ToolCategory.BUILTIN,
+        use_light_model: bool = False,
+    ) -> object:
+        assert provider == "gemini"
+        assert category is ToolCategory.BUILTIN
+        assert use_light_model is True
+
+        def search(prompt: str, model: str | None = None) -> LLMResponse:
+            captured.append((prompt, model))
+            return LLMResponse(
+                content="Claude Opus 4.5 が最新モデルです。",
+                model=model or "m",
+                raw={"source": "test"},
+            )
+
+        return search
+
+    monkeypatch.setattr(
+        "various_llm_benchmark.interfaces.commands.tools.resolve_web_search_client",
+        fake_resolver,
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "tools",
+            "web-search",
+            "最新のClaudeを検索",
+            "--provider",
+            "gemini",
+            "--light-model",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured == [("最新のClaudeを検索", None)]
+    assert "Claude Opus 4.5" in result.stdout
 
 
 def test_tools_retriever(monkeypatch: pytest.MonkeyPatch) -> None:
