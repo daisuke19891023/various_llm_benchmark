@@ -123,7 +123,7 @@ def retriever(
             threshold=threshold,
             timeout=timeout,
         )
-    console.print_json(json.dumps(result, ensure_ascii=False))
+    console.print_json(result.model_dump_json(ensure_ascii=False))
 
 
 @tools_app.command("code-execution")

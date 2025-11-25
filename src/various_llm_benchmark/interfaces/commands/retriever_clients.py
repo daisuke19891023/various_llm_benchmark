@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import TYPE_CHECKING, Literal, Protocol, cast
-
-if TYPE_CHECKING:
-    from various_llm_benchmark.llm.tools.retriever import RetrievedDocument
+from typing import Literal, Protocol, cast
 
 
 from various_llm_benchmark.llm.tools import ToolSelector
@@ -19,6 +16,7 @@ from various_llm_benchmark.llm.tools.registry import (
     ToolRegistration,
     register_tool,
 )
+from various_llm_benchmark.llm.tools.retriever import RetrieverResponse
 from various_llm_benchmark.settings import settings
 
 ProviderName = Literal["openai", "google", "voyage"]
@@ -35,7 +33,7 @@ class RetrieverHandler(Protocol):
         top_k: int | None = None,
         threshold: float | None = None,
         timeout: float = 5.0,
-    ) -> dict[str, object]:
+    ) -> RetrieverResponse:
         """Execute a retriever request."""
         ...
 
@@ -51,23 +49,13 @@ class RetrieverExecutor(Protocol):
         top_k: int | None = None,
         threshold: float | None = None,
         timeout: float = 5.0,
-    ) -> dict[str, object]:
+    ) -> RetrieverResponse:
         """Execute a retriever request."""
         ...
 
 
 def _tool_id(provider: ProviderName) -> str:
     return f"{RETRIEVER_TOOL_NAMESPACE}/{provider}"
-
-
-def _serialize_document(document: RetrievedDocument) -> dict[str, object]:
-    return {
-        "id": document.id,
-        "content": document.content,
-        "metadata": document.metadata,
-        "score": document.score,
-        "source": document.source,
-    }
 
 
 def _register_retriever_tool(
@@ -97,7 +85,7 @@ def _retrieve(
     top_k: int | None = None,
     threshold: float | None = None,
     timeout: float = 5.0,
-) -> dict[str, object]:
+) -> RetrieverResponse:
     from various_llm_benchmark.llm.tools.retriever import (
         EmbeddingProvider,
         create_postgres_pool,
@@ -144,7 +132,7 @@ def _retrieve(
     else:
         merged = text_results
 
-    return {"documents": [_serialize_document(doc) for doc in merged]}
+    return RetrieverResponse(documents=list(merged))
 
 
 def _ensure_retriever_tools_registered() -> None:

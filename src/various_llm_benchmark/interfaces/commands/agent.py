@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, cast
@@ -176,7 +175,7 @@ def agent_retriever(
             threshold=threshold,
             timeout=timeout,
         )
-    console.print_json(json.dumps(result, ensure_ascii=False))
+    console.print_json(result.model_dump_json(ensure_ascii=False))
 
 
 @agent_app.command("vision")

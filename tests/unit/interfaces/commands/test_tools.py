@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from typer.testing import CliRunner
 
 from various_llm_benchmark.interfaces.cli import app
+from various_llm_benchmark.llm.tools.retriever import RetrieverResponse
 from various_llm_benchmark.llm.tools.registry import ToolCategory
 from various_llm_benchmark.models import LLMResponse
 
@@ -172,7 +173,7 @@ def test_tools_retriever(monkeypatch: pytest.MonkeyPatch) -> None:
             top_k: int | None = None,
             threshold: float | None = None,
             timeout: float = 5.0,
-        ) -> dict[str, object]:
+        ) -> RetrieverResponse:
             captured.append(
                 {
                     "query": query,
@@ -182,7 +183,7 @@ def test_tools_retriever(monkeypatch: pytest.MonkeyPatch) -> None:
                     "timeout": timeout,
                 },
             )
-            return {"documents": []}
+            return RetrieverResponse(documents=[])
 
         return retrieve
 
