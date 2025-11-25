@@ -198,6 +198,13 @@ OpenAI/Claude/Geminiの組み込みWeb検索ツールを使った呼び出しを
 uv run various-llm-benchmark tools web-search "最新のAIニュースをまとめて" --provider openai
 uv run various-llm-benchmark tools web-search "ドキュメントの更新点を調べて" --provider anthropic
 uv run various-llm-benchmark tools web-search "最新の検索結果を教えて" --provider gemini
+
+### コード実行ツール呼び出し
+`tools code-execution`は各プロバイダーが提供するネイティブなコード実行ツール（OpenAI Code Interpreter / Claude Code Execution / Gemini Code Execution）を直接呼び出すためのサブコマンドです。内部で使っている`src/various_llm_benchmark/llm/tools/code_execution.py`は、Agentのツール呼び出し用にサンドボックス実行を登録するための仕組みであり、LLM側のネイティブ機能の疎通確認はこのコマンドで行います。
+
+uv run various-llm-benchmark tools code-execution "5 * (3 + 2) を計算してください" --provider openai
+uv run various-llm-benchmark tools code-execution "10 / 4 の結果を小数で出力" --provider anthropic
+uv run various-llm-benchmark tools code-execution "(8 - 3) * 7 の計算結果を教えて" --provider gemini
 uv run various-llm-benchmark agent web-search "設計指針を調査して" --provider openai --light-model
 uv run various-llm-benchmark agent-sdk web-search "最新のAPI例を調べて" --light-model
 ```
