@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     )
     log_file_path: str = Field(default="logs/app.log", validation_alias="LOG_FILE_PATH")
     log_verbose: bool = Field(default=False, validation_alias="LOG_VERBOSE")
+    allow_sensitive_logging: bool = Field(
+        default=False,
+        validation_alias="ALLOW_SENSITIVE_LOGGING",
+    )
     pydantic_ai_api_key: SecretStr = Field(
         default=SecretStr(""),
         validation_alias="PYDANTIC_AI_API_KEY",
@@ -81,7 +85,12 @@ class Settings(BaseSettings):
         le=1.0,
     )
     embedding_model: str = Field(default="", validation_alias="EMBEDDING_MODEL")
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        populate_by_name=True,
+    )
 
     @model_validator(mode="after")
     def validate_keys(self) -> Settings:

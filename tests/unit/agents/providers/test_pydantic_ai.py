@@ -248,8 +248,13 @@ def test_complete_logs_structured_events(monkeypatch: Any) -> None:
 
     expected_calls = [
         call("start", action="pydantic_ai_complete", model="gpt-mini"),
-        call("io", direction="input", prompt="hello"),
-        call("io", direction="output", model="gpt-mini", content="ok"),
+        call("io", direction="input", prompt="<redacted text length=5>"),
+        call(
+            "io",
+            direction="output",
+            model="<redacted text length=8>",
+            content="<redacted text length=2>",
+        ),
         call("end", action="pydantic_ai_complete", elapsed_seconds=1.5),
     ]
     for expected in expected_calls:

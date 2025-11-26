@@ -64,6 +64,11 @@ TyperベースのCLIで複数のLLMやエージェントフレームワークを
    uv run various-llm-benchmark --help
    ```
 
+## ログ出力とマスキング
+- LLMやエージェントへの入出力は`BaseComponent.log_io`経由で構造化ログとして出力されます。
+- 既定ではプロンプト/レスポンス本文などの文字列は`<redacted text length=...>`として伏字化され、長文や機密データがコンソールやファイルに残りません。
+- 機密データを含む完全な本文をログに残したい場合のみ、環境変数`ALLOW_SENSITIVE_LOGGING=true`を設定してください（安全のためデフォルトは`false`）。
+
 ### Dev Container (推奨)
 VS CodeとDockerがインストールされている場合、Dev Containerを利用すると環境構築が自動化されます。
 1. VS Codeでプロジェクトを開く。

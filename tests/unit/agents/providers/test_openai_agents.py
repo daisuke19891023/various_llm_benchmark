@@ -110,8 +110,13 @@ def test_complete_logs_structured_events(monkeypatch: Any) -> None:
 
     expected_calls = [
         call("start", action="openai_agents_complete", model="gpt-4o-mini"),
-        call("io", direction="input", prompt="ping"),
-        call("io", direction="output", model="gpt-4o-mini", content="done"),
+        call("io", direction="input", prompt="<redacted text length=4>"),
+        call(
+            "io",
+            direction="output",
+            model="<redacted text length=11>",
+            content="<redacted text length=4>",
+        ),
         call("end", action="openai_agents_complete", elapsed_seconds=1.0),
     ]
     for expected in expected_calls:

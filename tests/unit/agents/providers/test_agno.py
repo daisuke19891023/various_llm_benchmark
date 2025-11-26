@@ -188,8 +188,13 @@ def test_complete_emits_structured_logs(monkeypatch: Any) -> None:
 
     expected_calls = [
         call("start", action="agno_complete", provider="openai", model="gpt-test"),
-        call("io", direction="input", prompt="hello"),
-        call("io", direction="output", model="gpt-test", content="dummy-response"),
+        call("io", direction="input", prompt="<redacted text length=5>"),
+        call(
+            "io",
+            direction="output",
+            model="<redacted text length=8>",
+            content="<redacted text length=14>",
+        ),
         call("end", action="agno_complete", elapsed_seconds=1.0),
     ]
     for expected in expected_calls:
