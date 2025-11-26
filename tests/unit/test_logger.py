@@ -107,3 +107,21 @@ def test_log_io_allows_full_payload_when_enabled(tmp_path: Path, capsys: Any) ->
 
     assert "prompt" in plain_stdout
     assert visible_prompt in plain_stdout
+
+
+def test_configure_logging_preserves_active_settings(tmp_path: Path, capsys: Any) -> None:
+    """Subsequent configure_logging calls should not revert active settings."""
+    sensitive_settings = _settings(tmp_path, destination="stdout", allow_sensitive_logging=True)
+    configure_logging(sensitive_settings, force=True)
+
+    configure_logging()
+    component = SampleComponent()
+
+    visible_prompt = "persisted prompt"
+    component.log_io(direction="input", prompt=visible_prompt)
+    stdout = capsys.readouterr().out
+    plain_stdout = re.sub(r"\x1b\[[\d;]*m", "", stdout)
+
+    assert "prompt" in plain_stdout
+    assert visible_prompt in plain_stdout
+    assert "<redacted" not in plain_stdout

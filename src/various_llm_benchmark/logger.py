@@ -166,11 +166,13 @@ def configure_logging(app_settings: Settings | None = None, *, force: bool = Fal
         structlog.reset_defaults()
         _CONFIG_STATE.configured = False
 
-    active_settings = app_settings or settings
-    _CONFIG_STATE.active_settings = active_settings
+    active_settings = app_settings or _CONFIG_STATE.active_settings or settings
 
     if _CONFIG_STATE.configured and not force:
+        _CONFIG_STATE.active_settings = active_settings
         return
+
+    _CONFIG_STATE.active_settings = active_settings
     handlers = _build_handlers(active_settings)
 
     root_logger = logging.getLogger()
