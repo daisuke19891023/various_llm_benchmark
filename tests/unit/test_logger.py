@@ -16,7 +16,12 @@ class SampleComponent(BaseComponent):
     """Lightweight component for exercising logging helpers."""
 
 
-def _settings(tmp_path: Path, *, destination: Literal["stdout", "file", "both"] = "file") -> Settings:
+def _settings(
+    tmp_path: Path,
+    *,
+    destination: Literal["stdout", "file", "both"] = "file",
+    allow_sensitive_logging: bool = False,
+) -> Settings:
     """Create settings tailored for logging tests."""
     return Settings(
         openai_api_key=SecretStr("test-key"),
@@ -24,6 +29,7 @@ def _settings(tmp_path: Path, *, destination: Literal["stdout", "file", "both"] 
         log_destination=destination,
         log_file_path=str(tmp_path / "app.log"),
         log_level="INFO",
+        allow_sensitive_logging=allow_sensitive_logging,
     )
 
 
@@ -82,6 +88,22 @@ def test_log_io_emphasizes_direction(tmp_path: Path, capsys: Any) -> None:
 
     assert "io" in plain_stdout
     assert "prompt" in plain_stdout
-    assert "hello world" in plain_stdout
+    assert "hello world" not in plain_stdout
+    assert "<redacted text length=11>" in plain_stdout
     assert "⬅ input" in plain_stdout
     assert "\x1b[36m" in stdout
+
+
+def test_log_io_allows_full_payload_when_enabled(tmp_path: Path, capsys: Any) -> None:
+    """Sensitive payloads are only logged verbatim when explicitly enabled."""
+    settings = _settings(tmp_path, destination="stdout", allow_sensitive_logging=True)
+    configure_logging(settings, force=True)
+    component = SampleComponent()
+
+    visible_prompt = "example prompt text"
+    component.log_io(direction="input", prompt=visible_prompt)
+    stdout = capsys.readouterr().out
+    plain_stdout = re.sub(r"\x1b\[[\d;]*m", "", stdout)
+
+    assert "prompt" in plain_stdout
+    assert visible_prompt in plain_stdout

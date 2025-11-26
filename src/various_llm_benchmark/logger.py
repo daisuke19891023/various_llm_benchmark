@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import logging
 import sys
+from collections.abc import Callable, Iterable, Mapping
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
+from pydantic import BaseModel, ConfigDict
 from rich.console import Console
 from rich.logging import RichHandler
 import structlog
@@ -19,6 +21,20 @@ if TYPE_CHECKING:
 
 BindableLogger = BoundLogger
 Processor = structlog.types.Processor
+type LogValue = (
+    str
+    | bytes
+    | int
+    | float
+    | bool
+    | None
+    | Mapping[str, "LogValue"]
+    | list["LogValue"]
+    | tuple["LogValue", ...]
+    | set["LogValue"]
+)
+type LogPayload = Mapping[str, LogValue]
+LogSanitizer = Callable[[LogPayload, bool], dict[str, LogValue]]
 
 _LEVELS: dict[str, int] = {
     "CRITICAL": logging.CRITICAL,
@@ -28,7 +44,17 @@ _LEVELS: dict[str, int] = {
     "DEBUG": logging.DEBUG,
 }
 
-_CONFIG_STATE: dict[str, bool] = {"configured": False}
+
+class LoggingConfigState(BaseModel):
+    """State container for logger configuration."""
+
+    model_config = ConfigDict(arbitrary_types_allowed=True, validate_assignment=True)
+
+    configured: bool = False
+    active_settings: Settings = settings
+
+
+_CONFIG_STATE = LoggingConfigState()
 
 _LEVEL_STYLES: dict[str, str] = {
     "DEBUG": "cyan",
@@ -138,12 +164,13 @@ def configure_logging(app_settings: Settings | None = None, *, force: bool = Fal
     """Configure structlog and stdlib logging outputs based on :class:`Settings`."""
     if force:
         structlog.reset_defaults()
-        _CONFIG_STATE["configured"] = False
-
-    if _CONFIG_STATE["configured"] and not force:
-        return
+        _CONFIG_STATE.configured = False
 
     active_settings = app_settings or settings
+    _CONFIG_STATE.active_settings = active_settings
+
+    if _CONFIG_STATE.configured and not force:
+        return
     handlers = _build_handlers(active_settings)
 
     root_logger = logging.getLogger()
@@ -167,7 +194,7 @@ def configure_logging(app_settings: Settings | None = None, *, force: bool = Fal
         cache_logger_on_first_use=False,
     )
 
-    _CONFIG_STATE["configured"] = True
+    _CONFIG_STATE.configured = True
 
 
 def get_logger(*, component: str | None = None) -> BindableLogger:
@@ -187,14 +214,53 @@ class BaseComponent:
         """Return a logger bound with the current class name."""
         return get_logger(component=self.__class__.__name__)
 
-    def log_start(self, action: str, **kwargs: object) -> None:
+    def log_start(self, action: str, **kwargs: LogValue) -> None:
         """Emit a standardized start event."""
         self.logger.info("start", action=action, **kwargs)
 
-    def log_end(self, action: str, **kwargs: object) -> None:
+    def log_end(self, action: str, **kwargs: LogValue) -> None:
         """Emit a standardized completion event."""
         self.logger.info("end", action=action, **kwargs)
 
-    def log_io(self, direction: Literal["input", "output"], **kwargs: object) -> None:
-        """Emit structured input/output payloads."""
-        self.logger.info("io", direction=direction, **kwargs)
+    def log_io(
+        self,
+        direction: Literal["input", "output"],
+        *,
+        mask_sensitive: bool | None = None,
+        sanitizer: LogSanitizer | None = None,
+        **kwargs: LogValue,
+    ) -> None:
+        """Emit structured input/output payloads with optional masking."""
+        sanitizer_fn: LogSanitizer = sanitize_log_payload if sanitizer is None else sanitizer
+        allow_sensitive_logging = _CONFIG_STATE.active_settings.allow_sensitive_logging
+        should_mask = mask_sensitive if mask_sensitive is not None else not allow_sensitive_logging
+        raw_payload: dict[str, LogValue] = dict(kwargs)
+        payload: dict[str, LogValue] = sanitizer_fn(raw_payload, not should_mask)
+        self.logger.info("io", direction=direction, **payload)
+
+
+def sanitize_log_payload(payload: LogPayload, allow_sensitive: bool) -> dict[str, LogValue]:
+    """Mask or summarize sensitive log payloads."""
+    if allow_sensitive:
+        return dict(payload)
+
+    return {key: _sanitize_value(value) for key, value in payload.items()}
+
+
+def _sanitize_value(value: LogValue) -> LogValue:
+    if isinstance(value, str):
+        return f"<redacted text length={len(value)}>"
+    if isinstance(value, bytes):
+        return f"<bytes length={len(value)}>"
+    if isinstance(value, Mapping):
+        typed_mapping = cast("Mapping[str, LogValue]", value)
+        sanitized_mapping: dict[str, LogValue] = {}
+        for key, nested in typed_mapping.items():
+            sanitized_mapping[str(key)] = _sanitize_value(nested)
+        return sanitized_mapping
+    if isinstance(value, (list, tuple, set)):
+        sequence_items: list[LogValue] = list(cast("Iterable[LogValue]", value))
+        sanitized_items: list[LogValue] = [_sanitize_value(item) for item in sequence_items]
+        return sanitized_items if isinstance(value, list) else tuple(sanitized_items)
+
+    return value
